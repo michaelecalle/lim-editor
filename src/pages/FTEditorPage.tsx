@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ArchiveListModal from "../components/ArchiveListModal";
 import EditorStatusBanner from "../components/EditorStatusBanner";
 import PublishConfirmDialog from "../components/PublishConfirmDialog";
 import PublishVersionButton from "../components/PublishVersionButton";
+import RestoreArchiveButton from "../components/RestoreArchiveButton";
 import EditorShell from "../components/layout/EditorShell";
 import DirectionSelector from "../components/toolbar/DirectionSelector";
 import FTTable from "../components/ft-table/FTTable";
@@ -19,7 +21,11 @@ import {
   parseFtSourceArraysFromRaw,
   validateNormalizedFtSource,
 } from "../data/ligneFTSource";
-import { publishLigneFtData } from "../modules/ft-editor/api/ligneftApi";
+import {
+  fetchLigneFtArchive,
+  fetchLigneFtArchives,
+  publishLigneFtData,
+} from "../modules/ft-editor/api/ligneftApi";
 import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRows";
 import { areSourceTablesEqual } from "../modules/ft-editor/utils/areSourceTablesEqual";
 
@@ -82,6 +88,14 @@ export default function FTEditorPage() {
   const [exportDiagnostics, setExportDiagnostics] = useState<string[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [isRestoreListLoading, setIsRestoreListLoading] = useState(false);
+  const [restoreArchives, setRestoreArchives] = useState<
+    { name: string; timestamp: string | null }[]
+  >([]);
+  const [restoreErrorMessage, setRestoreErrorMessage] = useState<string | null>(
+    null
+  );
 
   const directionLabel = getDirectionLabel(direction);
   const sourceTableLabel = getSourceTableLabel(direction);
@@ -508,7 +522,7 @@ export default function FTEditorPage() {
 
           return {
             ...rawRow,
-            pkInterne: trimmedValue === "" ? null : Number(trimmedValue),
+            pkInterne: trimmedValue,
           };
         });
 
@@ -548,7 +562,7 @@ export default function FTEditorPage() {
 
           return {
             ...rawRow,
-            sitKm: trimmedValue === "" ? null : Number(trimmedValue),
+            sitKm: trimmedValue,
           };
         });
 
@@ -619,6 +633,75 @@ export default function FTEditorPage() {
 
     setIsPublishDialogOpen(false);
   }, [isPublishing]);
+
+  const handleOpenRestoreModal = useCallback(async () => {
+    if (isRestoreListLoading || isPublishing) {
+      return;
+    }
+
+    setRestoreErrorMessage(null);
+    setRestoreArchives([]);
+    setIsRestoreListLoading(true);
+    setIsRestoreModalOpen(true);
+
+    try {
+      const response = await fetchLigneFtArchives();
+      setRestoreArchives(response.archives);
+    } catch (error) {
+      setRestoreErrorMessage(
+        error instanceof Error
+          ? `Chargement des archives échoué : ${error.message}`
+          : "Chargement des archives échoué : erreur inconnue."
+      );
+    } finally {
+      setIsRestoreListLoading(false);
+    }
+  }, [isRestoreListLoading, isPublishing]);
+
+  const handleCloseRestoreModal = useCallback(() => {
+    if (isRestoreListLoading) {
+      return;
+    }
+
+    setIsRestoreModalOpen(false);
+  }, [isRestoreListLoading]);
+
+  const handleSelectArchive = useCallback(
+    async (archiveName: string) => {
+      if (isRestoreListLoading) {
+        return;
+      }
+
+      setRestoreErrorMessage(null);
+      setIsRestoreListLoading(true);
+
+      try {
+        const response = await fetchLigneFtArchive(archiveName);
+        const restoredData = response.archive.data as FtSourceDirectionTables;
+
+        setParsedSource(restoredData);
+        setExportStatus("success");
+        setExportMessage(
+          `Archive chargée localement : ${response.archive.name}. Cette version n’est pas encore remise en service tant qu’elle n’est pas republiée.`
+        );
+        setExportDiagnostics([
+          `Archive chargée : ${response.archive.name}`,
+          "Aucune publication automatique n’a été effectuée.",
+        ]);
+        setRestoreErrorMessage(null);
+        setIsRestoreModalOpen(false);
+      } catch (error) {
+        setRestoreErrorMessage(
+          error instanceof Error
+            ? `Chargement de l’archive échoué : ${error.message}`
+            : "Chargement de l’archive échoué : erreur inconnue."
+        );
+      } finally {
+        setIsRestoreListLoading(false);
+      }
+    },
+    []
+  );
 
   const handleConfirmPublish = useCallback(async () => {
     if (isPublishing) {
@@ -704,6 +787,15 @@ export default function FTEditorPage() {
         onConfirm={handleConfirmPublish}
       />
 
+      <ArchiveListModal
+        open={isRestoreModalOpen}
+        isBusy={isRestoreListLoading}
+        archives={restoreArchives}
+        errorMessage={restoreErrorMessage}
+        onClose={handleCloseRestoreModal}
+        onSelectArchive={handleSelectArchive}
+      />
+
       <EditorShell
       toolbar={
         <div
@@ -733,6 +825,12 @@ export default function FTEditorPage() {
             disabled={!hasUnpublishedChanges}
             isBusy={isPublishing}
             onClick={handlePublishClick}
+          />
+
+          <RestoreArchiveButton
+            disabled={false}
+            isBusy={isRestoreListLoading}
+            onClick={handleOpenRestoreModal}
           />
         </div>
       }

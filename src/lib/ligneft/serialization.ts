@@ -22,7 +22,7 @@ export function extractNormalizedDataFromTs(content: string): unknown {
   const normalizedContent = content.replace(/^\uFEFF/, "");
 
   const match = normalizedContent.match(
-    /export\s+const\s+LIGNE_FT_NORMALIZED\s*:\s*LigneFTNormalized\s*=\s*([\s\S]*);?\s*$/,
+    /export\s+const\s+LIGNE_FT_NORMALIZED\s*:\s*LigneFTNormalized\s*=\s*([\s\S]*?)\s*;\s*$/,
   );
 
   if (!match) {
