@@ -1,5 +1,5 @@
 import type { FtLineCommon, LigneFTNormalized } from "../../types/ligneFTNormalized";
-import { LigneFtValidationError } from "./errors";
+import { LigneFtValidationError } from "./errors.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

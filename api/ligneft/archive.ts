@@ -1,10 +1,10 @@
-import { loadArchive } from "../../src/lib/ligneft/archive";
+import { loadArchive } from "../../src/lib/ligneft/archive.js";
 import {
   LigneFtArchiveNotFoundError,
   LigneFtConfigurationError,
   LigneFtGithubError,
   LigneFtValidationError,
-} from "../../src/lib/ligneft/errors";
+} from "../../src/lib/ligneft/errors.js";
 import type {
   LigneFtArchiveResponse,
   LigneFtErrorResponse,

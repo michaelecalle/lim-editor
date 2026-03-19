@@ -1,5 +1,5 @@
 import type { LigneFTNormalized } from "../../types/ligneFTNormalized";
-import { assertValidNormalizedData } from "./validation";
+import { assertValidNormalizedData } from "./validation.js";
 
 function stableStringify(value: unknown): string {
   return JSON.stringify(value, null, 2);
