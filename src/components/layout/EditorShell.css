@@ -1,0 +1,44 @@
+.editor-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f3f4f6;
+  color: #111827;
+  overflow: hidden;
+}
+
+.editor-shell__header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #d1d5db;
+  flex: 0 0 64px;
+}
+
+.editor-shell__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-shell__main {
+  min-width: 0;
+  min-height: 0;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.editor-shell__side {
+  min-width: 0;
+  min-height: 0;
+  padding: 20px;
+  background: #ffffff;
+  border-left: 1px solid #d1d5db;
+  overflow-y: auto;
+  overflow-x: hidden;
+}

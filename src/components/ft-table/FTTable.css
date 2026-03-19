@@ -1,0 +1,137 @@
+.ft-table-placeholder {
+  height: 100%;
+  min-height: 400px;
+  padding: 24px;
+  border: 1px dashed #9ca3af;
+  border-radius: 16px;
+  background: #ffffff;
+  overflow: auto;
+}
+
+.ft-table-placeholder__title {
+  margin-bottom: 12px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ft-table-placeholder__text {
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: #4b5563;
+}
+
+.ft-table-placeholder__list {
+  margin: 8px 0 16px 20px;
+  padding: 0;
+  color: #374151;
+}
+
+.ft-table-placeholder__list li {
+  margin: 6px 0;
+}
+
+.ft-table-v0-wrapper {
+  margin: 16px 0 20px;
+  overflow: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.ft-table-v0 {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: #111827;
+}
+
+.ft-table-v0 thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #f3f4f6;
+  border-bottom: 1px solid #9ca3af;
+}
+
+.ft-table-v0 tbody td {
+  padding: 20px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.ft-table-v0 tbody tr:hover {
+  background: #f9fafb;
+}
+
+.ft-table-v0 tbody tr {
+  cursor: pointer;
+}
+
+.ft-table-v0__row--selected {
+  background: #dbeafe;
+}
+
+.ft-table-v0__row--selected:hover {
+  background: #bfdbfe;
+}
+
+.ft-cell-empty {
+  color: #9ca3af;
+}
+
+.ft-cell-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 56px;
+  gap: 12px;
+}
+
+.ft-cell-bar {
+  width: 100%;
+  min-width: 36px;
+  height: 2px;
+  background: #111827;
+  border-radius: 999px;
+}
+
+.ft-table-v0__note-row td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: normal;
+}
+
+.ft-note-row-content {
+  color: #b91c1c;
+  font-style: italic;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.ft-cell-stack--csv-vmax {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fed7aa;
+}
+
+.ft-cell-text--csv-vmax {
+  display: inline-block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fed7aa;
+}
+
+.ft-cell-empty--csv-vmax {
+  display: inline-block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fed7aa;
+  color: #9ca3af;
+}

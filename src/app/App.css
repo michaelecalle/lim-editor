@@ -1,0 +1,26 @@
+.app-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+}
+
+.app-page__card {
+  min-width: 420px;
+  padding: 32px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.app-page__card h1 {
+  margin: 0 0 16px 0;
+  font-size: 32px;
+}
+
+.app-page__card p {
+  margin: 8px 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
