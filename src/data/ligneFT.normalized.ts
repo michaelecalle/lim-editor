@@ -930,7 +930,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "id": "ns-data-0055",
         "type": "data",
         "reseau": "RFN",
-        "pkInterne": "805.1",
+        "pkInterne": "805.5",
         "pkAdif": "",
         "pkLfp": "",
         "pkRfn": "467.5",
