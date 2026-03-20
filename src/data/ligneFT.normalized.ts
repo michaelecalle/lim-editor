@@ -935,7 +935,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "pkLfp": "",
         "pkRfn": "467.5",
         "bloqueo": "BAL KVB",
-        "vmax": "30",
+        "vmax": "160",
         "sitKm": "805.5",
         "dependencia": "PERPIGNAN",
         "radio": "◯ GSMR",
