@@ -85,7 +85,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "25",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -119,7 +119,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -153,7 +153,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -170,7 +170,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -223,7 +223,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -257,7 +257,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -665,7 +665,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "BIF. GIRONA-MERCADERIES",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -699,7 +699,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "GIRONA",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -716,7 +716,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -921,7 +921,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "vmax": "160",
         "sitKm": "802.0",
         "dependencia": "LIMITE RAC - LFP-FRR",
-        "radio": "◯ GSMR",
+        "radio": "TEST",
         "rampCaract": "10",
         "csv": false,
         "notes": []
@@ -1063,7 +1063,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -1080,7 +1080,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -1097,7 +1097,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -1114,7 +1114,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -1167,7 +1167,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -1184,7 +1184,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -1201,7 +1201,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -1592,7 +1592,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -1609,7 +1609,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "BIF. GIRONA-MERCADERIES",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -1643,7 +1643,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "GIRONA",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
@@ -1660,7 +1660,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": false,
+        "csv": true,
         "notes": []
       },
       {
