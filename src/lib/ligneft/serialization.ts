@@ -1,5 +1,5 @@
 import type { LigneFTNormalized } from "../../types/ligneFTNormalized";
-import { assertValidNormalizedData } from "./validation";
+import { assertValidNormalizedData } from "./validation.js";
 
 function stableStringify(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -22,7 +22,7 @@ export function extractNormalizedDataFromTs(content: string): unknown {
   const normalizedContent = content.replace(/^\uFEFF/, "");
 
   const match = normalizedContent.match(
-    /export\s+const\s+LIGNE_FT_NORMALIZED\s*:\s*LigneFTNormalized\s*=\s*([\s\S]*);?\s*$/,
+    /export\s+const\s+LIGNE_FT_NORMALIZED\s*:\s*LigneFTNormalized\s*=\s*([\s\S]*?)\s*;\s*$/,
   );
 
   if (!match) {

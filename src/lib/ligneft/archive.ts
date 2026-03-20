@@ -4,28 +4,28 @@ import {
   ACTIVE_FILE_PATH,
   ARCHIVES_DIR_PATH,
   MAX_ARCHIVES,
-} from "./constants";
+} from "./constants.js";
 import {
   LigneFtArchiveNotFoundError,
   LigneFtGithubError,
-} from "./errors";
+} from "./errors.js";
 import {
   githubDeleteFile,
   githubGetFile,
   githubListDirectory,
   githubPutFile,
-} from "./github";
+} from "./github.js";
 import {
   buildNormalizedTsFile,
   parseAndValidateNormalizedTs,
-} from "./serialization";
+} from "./serialization.js";
 import {
   buildArchiveFilename,
   extractTimestampFromArchiveName,
   isArchiveFilename,
   sortArchivesNewestFirst,
-} from "./timestamps";
-import { assertValidNormalizedData } from "./validation";
+} from "./timestamps.js";
+import { assertValidNormalizedData } from "./validation.js";
 
 export async function loadActiveFile(): Promise<{
   name: string;

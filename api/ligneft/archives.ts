@@ -1,9 +1,9 @@
-import { listArchives } from "../../src/lib/ligneft/archive";
+import { listArchives } from "../../src/lib/ligneft/archive.js";
 import type {
   LigneFtArchivesResponse,
   LigneFtErrorResponse,
 } from "../../src/types/ligneft-api";
-import { LigneFtConfigurationError, LigneFtGithubError } from "../../src/lib/ligneft/errors";
+import { LigneFtConfigurationError, LigneFtGithubError } from "../../src/lib/ligneft/errors.js";
 
 function jsonResponse(body: LigneFtArchivesResponse | LigneFtErrorResponse, status = 200): Response {
   return new Response(JSON.stringify(body), {

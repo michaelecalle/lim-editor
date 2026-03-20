@@ -1,5 +1,5 @@
-import { DEFAULT_GITHUB_BRANCH } from "./constants";
-import { LigneFtConfigurationError, LigneFtGithubError } from "./errors";
+import { DEFAULT_GITHUB_BRANCH } from "./constants.js";
+import { LigneFtConfigurationError, LigneFtGithubError } from "./errors.js";
 
 type GithubConfig = {
   token: string;
