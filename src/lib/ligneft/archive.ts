@@ -27,6 +27,27 @@ import {
 } from "./timestamps.js";
 import { assertValidNormalizedData } from "./validation.js";
 
+function parseAndValidateArchiveJson(content: string): LigneFTNormalized {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw new Error(
+      `Invalid archive JSON content${
+        error instanceof Error && error.message ? `: ${error.message}` : ""
+      }`,
+    );
+  }
+
+  assertValidNormalizedData(parsed);
+  return parsed;
+}
+
+function buildArchiveJsonFile(data: LigneFTNormalized): string {
+  return `${JSON.stringify(data, null, 2)}\n`;
+}
+
 export async function loadActiveFile(): Promise<{
   name: string;
   path: string;
@@ -93,7 +114,7 @@ export async function loadArchive(name: string): Promise<{
 
   try {
     const file = await githubGetFile(path);
-    const data = parseAndValidateNormalizedTs(file.content);
+    const data = parseAndValidateArchiveJson(file.content);
 
     return {
       name: file.name,
@@ -125,10 +146,11 @@ export async function createArchiveFromActiveFile(date = new Date()): Promise<{
   const activeFile = await loadActiveFile();
   const archiveName = buildArchiveFilename(date);
   const archivePath = `${ARCHIVES_DIR_PATH}/${archiveName}`;
+  const archiveContent = buildArchiveJsonFile(activeFile.data);
 
   const result = await githubPutFile(
     archivePath,
-    activeFile.content,
+    archiveContent,
     `Archive active ligneFT.normalized.ts as ${archiveName}`,
   );
 

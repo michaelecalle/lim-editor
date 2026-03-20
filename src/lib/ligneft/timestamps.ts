@@ -6,12 +6,12 @@ export function buildArchiveFilename(date: Date): string {
   const minutes = String(date.getMinutes()).padStart(2, "0");
   const seconds = String(date.getSeconds()).padStart(2, "0");
 
-  return `ligneFT.normalized.${year}-${month}-${day}T${hours}-${minutes}-${seconds}.ts`;
+  return `ligneFT.normalized.${year}-${month}-${day}T${hours}-${minutes}-${seconds}.json`;
 }
 
 export function extractTimestampFromArchiveName(name: string): string | null {
   const match = name.match(
-    /^ligneFT\.normalized\.(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})\.ts$/,
+    /^ligneFT\.normalized\.(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})\.json$/,
   );
 
   if (!match) {
