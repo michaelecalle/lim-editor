@@ -102,7 +102,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "BARCELONA SANTS",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -119,7 +119,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -153,7 +153,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -206,7 +206,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "LA SAGRERA AV",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -223,7 +223,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -257,7 +257,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "28",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -648,7 +648,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -699,7 +699,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "GIRONA",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
@@ -716,7 +716,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "",
         "radio": "◯ GSMR",
         "rampCaract": "18",
-        "csv": true,
+        "csv": false,
         "notes": []
       },
       {
