@@ -1451,6 +1451,13 @@ export default function RowDetailsPanel({
                 : "aucun"}
             </strong>
           </p>
+
+          <p>
+            Source brute :{" "}
+            <strong>
+              {JSON.stringify(selectedRow.debug.sourceRaw)}
+            </strong>
+          </p>
         </>
       )}
 

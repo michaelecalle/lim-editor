@@ -15,3 +15,4 @@ pnpm-debug.log*
 Thumbs.db
 # Archives LIM Editor obsolètes au format TypeScript
 src/data/archives/ligneft/*.ts
+src/data/archive/*.ts

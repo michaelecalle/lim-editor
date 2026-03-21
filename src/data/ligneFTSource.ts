@@ -2,7 +2,7 @@ import type { EditorDirection } from "../modules/ft-editor/types/viewTypes";
 import type { FtSourceDirectionTables } from "../modules/ft-editor/types/sourceTypes";
 
 export const LIGNE_FT_RAW_URL =
-  "https://raw.githubusercontent.com/michaelecalle/limgpt/main/src/data/ligneFT.normalized.ts";
+  "https://raw.githubusercontent.com/michaelecalle/lim-editor/main/src/data/ligneFT.normalized.ts";
 
 export type RemoteFtSourceResult =
   | {
@@ -41,10 +41,12 @@ export type NormalizedFtSourceValidationResult = {
 
 export async function fetchRemoteFtSourceRaw(): Promise<RemoteFtSourceResult> {
   try {
-    const response = await fetch(LIGNE_FT_RAW_URL, {
-      method: "GET",
-      cache: "no-store",
-    });
+const cacheBustedUrl = `${LIGNE_FT_RAW_URL}?t=${Date.now()}`;
+
+const response = await fetch(cacheBustedUrl, {
+  method: "GET",
+  cache: "no-store",
+});
 
     if (!response.ok) {
       return {
