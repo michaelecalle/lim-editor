@@ -959,7 +959,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "vmax": "30",
         "sitKm": "615.9",
         "dependencia": "CAN TUNIS AV",
-        "radio": "test",
+        "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
         "notes": []
