@@ -940,7 +940,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "dependencia": "PERPINYA",
         "radio": "◯ GSMR",
         "rampCaract": "10",
-        "csv": false,
+        "csv": true,
         "notes": []
       }
     ]
