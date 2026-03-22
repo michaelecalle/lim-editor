@@ -18,7 +18,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0002",
@@ -35,7 +36,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0003",
@@ -52,7 +54,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0004",
@@ -69,7 +72,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0005",
@@ -86,7 +90,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0006",
@@ -103,7 +108,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0007",
@@ -120,7 +126,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0008",
@@ -137,7 +144,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0009",
@@ -154,7 +162,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0010",
@@ -171,7 +180,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-note-0011",
@@ -190,7 +200,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "csv": false,
         "notes": [
           "35 VIAS ESTACIONAMM. V11, V19 Y V10, V18"
-        ]
+        ],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0012",
@@ -207,7 +218,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0013",
@@ -224,7 +236,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0014",
@@ -241,7 +254,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0015",
@@ -258,7 +272,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0016",
@@ -275,7 +290,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0017",
@@ -292,7 +308,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0018",
@@ -309,7 +326,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0019",
@@ -326,7 +344,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0020",
@@ -343,7 +362,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0021",
@@ -360,7 +380,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0022",
@@ -377,7 +398,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0023",
@@ -394,7 +416,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0024",
@@ -411,7 +434,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0025",
@@ -428,7 +452,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0026",
@@ -445,7 +470,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0027",
@@ -462,7 +488,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0028",
@@ -479,7 +506,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0029",
@@ -496,7 +524,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0030",
@@ -513,7 +542,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0031",
@@ -530,7 +560,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0032",
@@ -547,7 +578,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0033",
@@ -564,7 +596,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0034",
@@ -581,7 +614,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0035",
@@ -598,7 +632,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0036",
@@ -615,7 +650,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0037",
@@ -632,7 +668,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0038",
@@ -649,7 +686,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0039",
@@ -666,7 +704,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0040",
@@ -683,7 +722,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0041",
@@ -700,7 +740,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0042",
@@ -717,7 +758,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0043",
@@ -734,7 +776,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0044",
@@ -751,7 +794,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0045",
@@ -768,7 +812,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-note-0046",
@@ -788,7 +833,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "notes": [
           "80 AL PASO VIAS 3, 4 Y 6",
           "50 AL PASO VIA 7"
-        ]
+        ],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0047",
@@ -805,7 +851,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0048",
@@ -822,7 +869,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "13",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0049",
@@ -839,7 +887,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "13",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0050",
@@ -856,7 +905,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "13",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0051",
@@ -873,7 +923,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0052",
@@ -890,7 +941,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0053",
@@ -907,7 +959,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "10",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0054",
@@ -924,7 +977,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "10",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "ns-data-0055",
@@ -941,7 +995,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "10",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       }
     ]
   },
@@ -962,7 +1017,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "test",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0002",
@@ -979,7 +1035,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0003",
@@ -996,7 +1053,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0004",
@@ -1013,7 +1071,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0005",
@@ -1030,7 +1089,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "25",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0006",
@@ -1047,7 +1107,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0007",
@@ -1064,7 +1125,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0008",
@@ -1081,7 +1143,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0009",
@@ -1098,7 +1161,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0010",
@@ -1115,7 +1179,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-note-0011",
@@ -1134,7 +1199,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "csv": false,
         "notes": [
           "35 VIAS ESTACIONAM. V11, V19 Y V10, V18"
-        ]
+        ],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0012",
@@ -1151,7 +1217,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0013",
@@ -1168,7 +1235,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0014",
@@ -1185,7 +1253,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0015",
@@ -1202,7 +1271,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0016",
@@ -1219,7 +1289,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0017",
@@ -1236,7 +1307,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0018",
@@ -1253,7 +1325,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0019",
@@ -1270,7 +1343,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "28",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0020",
@@ -1287,7 +1361,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0021",
@@ -1304,7 +1379,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0022",
@@ -1321,7 +1397,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0023",
@@ -1338,7 +1415,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0024",
@@ -1355,7 +1433,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0025",
@@ -1372,7 +1451,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0026",
@@ -1389,7 +1469,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0027",
@@ -1406,7 +1487,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0028",
@@ -1423,7 +1505,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0029",
@@ -1440,7 +1523,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0030",
@@ -1457,7 +1541,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0031",
@@ -1474,7 +1559,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0032",
@@ -1491,7 +1577,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0033",
@@ -1508,7 +1595,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0034",
@@ -1525,7 +1613,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0035",
@@ -1542,7 +1631,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0036",
@@ -1559,7 +1649,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0037",
@@ -1576,7 +1667,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0038",
@@ -1593,7 +1685,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0039",
@@ -1610,7 +1703,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": true,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0040",
@@ -1627,7 +1721,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0041",
@@ -1644,7 +1739,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0042",
@@ -1661,7 +1757,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0043",
@@ -1678,7 +1775,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0044",
@@ -1695,7 +1793,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0045",
@@ -1712,7 +1811,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-note-0046",
@@ -1732,7 +1832,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "notes": [
           "80 AL PASO VIAS 3, 4 Y 6",
           "50 AL PASO VIA 7"
-        ]
+        ],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0047",
@@ -1749,7 +1850,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0048",
@@ -1766,7 +1868,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0049",
@@ -1783,7 +1886,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0050",
@@ -1800,7 +1904,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "18",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0051",
@@ -1817,7 +1922,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "12",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0052",
@@ -1834,7 +1940,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "12",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0053",
@@ -1851,7 +1958,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "0",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0054",
@@ -1868,7 +1976,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "0",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       },
       {
         "id": "sn-data-0055",
@@ -1885,7 +1994,8 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "radio": "◯ GSMR",
         "rampCaract": "0",
         "csv": false,
-        "notes": []
+        "notes": [],
+        "etcs": "①"
       }
     ]
   }
