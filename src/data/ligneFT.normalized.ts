@@ -888,7 +888,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "13",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "ns-data-0050",
@@ -906,7 +906,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "13",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "ns-data-0051",
@@ -924,7 +924,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "18",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "ns-data-0052",
@@ -942,7 +942,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "18",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "ns-data-0053",
@@ -960,7 +960,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "10",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "ns-data-0054",
@@ -978,7 +978,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "10",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "ns-data-0055",
@@ -996,7 +996,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "10",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       }
     ]
   },
@@ -1869,7 +1869,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "18",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "sn-data-0049",
@@ -1887,7 +1887,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "18",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "sn-data-0050",
@@ -1905,7 +1905,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "18",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "sn-data-0051",
@@ -1923,7 +1923,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "12",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "sn-data-0052",
@@ -1941,7 +1941,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "12",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "sn-data-0053",
@@ -1959,7 +1959,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "0",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "sn-data-0054",
@@ -1977,7 +1977,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "0",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       },
       {
         "id": "sn-data-0055",
@@ -1995,7 +1995,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "rampCaract": "0",
         "csv": false,
         "notes": [],
-        "etcs": "①"
+        "etcs": ""
       }
     ]
   }
