@@ -9,6 +9,7 @@ import DirectionSelector from "../components/toolbar/DirectionSelector";
 import FTTable from "../components/ft-table/FTTable";
 import RowDetailsPanel from "../components/details/RowDetailsPanel";
 import type {
+  EditorDirectField,
   EditorDirection,
   EditorFtRowView,
 } from "../modules/ft-editor/types/viewTypes";
@@ -79,6 +80,8 @@ export default function FTEditorPage() {
     sudNord: { rows: [] },
   });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [requestedEditorField, setRequestedEditorField] =
+    useState<EditorDirectField | null>(null);
   const [exportStatus, setExportStatus] = useState<"idle" | "success" | "error">(
     "idle"
   );
@@ -250,6 +253,16 @@ export default function FTEditorPage() {
   const networkOptions = useMemo(() => {
     const values = sourceRows
       .map((row) => row.technical.network?.trim() ?? "")
+      .filter((value) => value !== "");
+
+    return Array.from(new Set(values)).sort((a, b) =>
+      a.localeCompare(b, "fr", { sensitivity: "base" })
+    );
+  }, [sourceRows]);
+
+    const etcsOptions = useMemo(() => {
+    const values = sourceRows
+      .map((row) => row.visible.etcs.trim())
       .filter((value) => value !== "");
 
     return Array.from(new Set(values)).sort((a, b) =>
@@ -615,6 +628,45 @@ export default function FTEditorPage() {
     [selectedRow]
   );
 
+    const handleApplyEtcs = useCallback(
+    (nextEtcs: string) => {
+      if (!selectedRow) {
+        return;
+      }
+
+      const trimmedValue = nextEtcs.trim();
+
+      setParsedSource((previous) => {
+        const tableName = selectedRow.identity.sourceTableName;
+        const currentTable = previous[tableName];
+
+        const nextRows = currentTable.rows.map((rawRow) => {
+          if (!isRecord(rawRow)) {
+            return rawRow;
+          }
+
+          const rawId = typeof rawRow["id"] === "string" ? rawRow["id"] : "";
+
+          if (rawId !== selectedRow.id) {
+            return rawRow;
+          }
+
+          return {
+            ...rawRow,
+            etcs: trimmedValue,
+          };
+        });
+
+        return {
+          ...previous,
+          [tableName]: {
+            rows: nextRows,
+          },
+        };
+      });
+    },
+    [selectedRow]
+  );
     const handlePublishClick = useCallback(() => {
     if (!hasUnpublishedChanges || isPublishing) {
       return;
@@ -847,7 +899,14 @@ export default function FTEditorPage() {
             lastRowPreview={lastRowPreview}
             rows={sourceRows}
             selectedRowId={selectedRowId}
-            onRowSelect={(row) => setSelectedRowId(row.id)}
+            onRowSelect={(row) => {
+              setSelectedRowId(row.id);
+              setRequestedEditorField(null);
+            }}
+            onCellEditRequest={(row, field) => {
+              setSelectedRowId(row.id);
+              setRequestedEditorField(field);
+            }}
           />
 
           <EditorStatusBanner
@@ -880,6 +939,8 @@ export default function FTEditorPage() {
           sourceStatus={sourceStatus}
           rowCount={sourceRows.length}
           selectedRow={selectedRow}
+          requestedEditorField={requestedEditorField}
+          onRequestedEditorHandled={() => setRequestedEditorField(null)}
           bloqueoOptions={bloqueoOptions}
           onApplyBloqueo={handleApplyBloqueo}
           vmaxOptions={vmaxOptions}
@@ -894,6 +955,8 @@ export default function FTEditorPage() {
           networkOptions={networkOptions}
           onApplyNetwork={handleApplyNetwork}
           onApplyCsv={handleApplyCsv}
+          etcsOptions={etcsOptions}
+          onApplyEtcs={handleApplyEtcs}
         />
       }
       />

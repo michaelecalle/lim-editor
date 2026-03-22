@@ -173,6 +173,7 @@ function buildEmptyRowView(
       vmax: "",
       radio: "",
       rc: "",
+      etcs: "",
       noteDisplay: "",
     },
     visual: {
@@ -227,6 +228,7 @@ function buildRowView(
   const vmax = readStringField(rawRow, "vmax", warnings);
   const radio = readStringField(rawRow, "radio", warnings);
   const rc = readStringField(rawRow, "rampCaract", warnings);
+  const etcs = readStringField(rawRow, "etcs", warnings);
   const noteDisplay = readNoteDisplay(rawRow, warnings);
 
   const isNoteOnly = type === "note";
@@ -253,6 +255,7 @@ function buildRowView(
       vmax,
       radio,
       rc,
+      etcs,
       noteDisplay,
     },
     visual: {

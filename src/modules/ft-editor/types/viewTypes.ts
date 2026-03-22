@@ -2,6 +2,18 @@ export type EditorDirection = "NORD_SUD" | "SUD_NORD";
 
 export type EditorSourceTableName = "nordSud" | "sudNord";
 
+export type EditorDirectField =
+  | "pkInternal"
+  | "network"
+  | "pkDisplay"
+  | "dependencia"
+  | "csv"
+  | "bloqueo"
+  | "vmax"
+  | "radio"
+  | "rc"
+  | "etcs";
+  
 export type EditorFtRowView = {
   id: string;
 
@@ -23,6 +35,7 @@ export type EditorFtRowView = {
     vmax: string;
     radio: string;
     rc: string;
+    etcs: string;
     noteDisplay: string;
   };
 

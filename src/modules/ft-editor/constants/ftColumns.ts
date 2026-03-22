@@ -11,6 +11,7 @@ export const FT_COLUMNS = [
   "Conc",
   "Radio",
   "Ramp Caract",
+  "ETCS",
 ] as const;
 
 export type FTColumnKey = (typeof FT_COLUMNS)[number];

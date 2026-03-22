@@ -1,6 +1,9 @@
 import "./FTTable.css";
 import type { ReactNode } from "react";
-import type { EditorFtRowView } from "../../modules/ft-editor/types/viewTypes";
+import type {
+  EditorDirectField,
+  EditorFtRowView,
+} from "../../modules/ft-editor/types/viewTypes";
 import { FT_COLUMNS } from "../../modules/ft-editor/constants/ftColumns";
 
 type FTTableProps = {
@@ -15,9 +18,40 @@ type FTTableProps = {
   rows: EditorFtRowView[];
   selectedRowId: string | null;
   onRowSelect: (row: EditorFtRowView) => void;
+  onCellEditRequest: (
+    row: EditorFtRowView,
+    field: EditorDirectField | null
+  ) => void;
 };
 
 const NOTE_START_COLUMN_INDEX = 5;
+
+function getDirectFieldForColumn(
+  column: (typeof FT_COLUMNS)[number]
+): EditorDirectField | null {
+  switch (column) {
+    case "PK interne":
+      return "pkInternal";
+    case "Réseau":
+      return "network";
+    case "Sit Km":
+      return "pkDisplay";
+    case "Dependencia":
+      return "dependencia";
+    case "Bloqueo":
+      return "bloqueo";
+    case "V Max":
+      return "vmax";
+    case "Radio":
+      return "radio";
+    case "Ramp Caract":
+      return "rc";
+    case "ETCS":
+      return "etcs";
+    default:
+      return null;
+  }
+}
 
 function getRawCellValue(
   row: EditorFtRowView,
@@ -48,6 +82,8 @@ function getRawCellValue(
       return row.visible.radio;
     case "Ramp Caract":
       return row.visible.rc;
+    case "ETCS":
+      return row.visible.etcs;
     default:
       return "";
   }
@@ -336,6 +372,7 @@ export default function FTTable({
   rows,
   selectedRowId,
   onRowSelect,
+  onCellEditRequest,
 }: FTTableProps) {
   const calculatedNetworkBarMap = buildCalculatedNetworkBarMap(rows);
   const calculatedRcBarMap = buildCalculatedRcBarMap(rows);
@@ -444,7 +481,14 @@ export default function FTTable({
                   onClick={() => onRowSelect(row)}
                 >
                   {FT_COLUMNS.map((column) => (
-                    <td key={`${row.id}-${column}`}>
+                    <td
+                      key={`${row.id}-${column}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCellEditRequest(row, getDirectFieldForColumn(column));
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
                       {renderCellContent(
                         row,
                         column,

@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import type { EditorFtRowView } from "../../modules/ft-editor/types/viewTypes";
+import type {
+  EditorDirectField,
+  EditorFtRowView,
+} from "../../modules/ft-editor/types/viewTypes";
 
 type RowDetailsPanelProps = {
   directionLabel: string;
   sourceStatus: "idle" | "loading" | "success" | "error";
   rowCount: number;
   selectedRow: EditorFtRowView | null;
+  requestedEditorField: EditorDirectField | null;
+  onRequestedEditorHandled: () => void;
   bloqueoOptions: string[];
   onApplyBloqueo: (nextBloqueo: string) => void;
   vmaxOptions: string[];
@@ -20,6 +25,8 @@ type RowDetailsPanelProps = {
   networkOptions: string[];
   onApplyNetwork: (nextNetwork: string) => void;
   onApplyCsv: (nextCsv: boolean) => void;
+  etcsOptions: string[];
+  onApplyEtcs: (nextEtcs: string) => void;
 };
 
 const CUSTOM_BLOQUEO_VALUE = "__custom_bloqueo__";
@@ -27,6 +34,7 @@ const CUSTOM_VMAX_VALUE = "__custom_vmax__";
 const CUSTOM_RC_VALUE = "__custom_rc__";
 const CUSTOM_RADIO_VALUE = "__custom_radio__";
 const CUSTOM_NETWORK_VALUE = "__custom_network__";
+const CUSTOM_ETCS_VALUE = "__custom_etcs__";
 
 function formatTechnicalPk(value: number | null): string {
   return value == null ? "—" : value.toFixed(1);
@@ -54,6 +62,8 @@ export default function RowDetailsPanel({
   sourceStatus,
   rowCount,
   selectedRow,
+  requestedEditorField,
+  onRequestedEditorHandled,
   bloqueoOptions,
   onApplyBloqueo,
   vmaxOptions,
@@ -68,6 +78,8 @@ export default function RowDetailsPanel({
   networkOptions,
   onApplyNetwork,
   onApplyCsv,
+  etcsOptions,
+  onApplyEtcs,
 }: RowDetailsPanelProps) {
   const [bloqueoMode, setBloqueoMode] = useState<string>("");
   const [customBloqueo, setCustomBloqueo] = useState("");
@@ -101,6 +113,10 @@ export default function RowDetailsPanel({
   const [csvDraft, setCsvDraft] = useState(false);
   const [isCsvEditorOpen, setIsCsvEditorOpen] = useState(false);
 
+  const [etcsMode, setEtcsMode] = useState<string>("");
+  const [customEtcs, setCustomEtcs] = useState("");
+  const [isEtcsEditorOpen, setIsEtcsEditorOpen] = useState(false);
+
   const selectedBloqueo = selectedRow?.visible.bloqueo ?? "";
   const selectedVmax = selectedRow?.visible.vmax ?? "";
   const selectedRc = selectedRow?.visible.rc ?? "";
@@ -110,6 +126,7 @@ export default function RowDetailsPanel({
   const selectedPkDisplay = selectedRow?.visible.pkDisplay ?? "";
   const selectedNetwork = selectedRow?.technical.network ?? "";
   const selectedCsv = selectedRow?.technical.csv ?? false;
+  const selectedEtcs = selectedRow?.visible.etcs ?? "";
 
   useEffect(() => {
     if (!selectedRow) {
@@ -275,6 +292,30 @@ export default function RowDetailsPanel({
     setIsCsvEditorOpen(false);
   }, [selectedRow, selectedCsv]);
 
+  useEffect(() => {
+    if (!selectedRow) {
+      setEtcsMode("");
+      setCustomEtcs("");
+      setIsEtcsEditorOpen(false);
+      return;
+    }
+
+    const trimmedEtcs = selectedEtcs.trim();
+
+    if (trimmedEtcs === "") {
+      setEtcsMode(CUSTOM_ETCS_VALUE);
+      setCustomEtcs("");
+    } else if (etcsOptions.includes(trimmedEtcs)) {
+      setEtcsMode(trimmedEtcs);
+      setCustomEtcs("");
+    } else {
+      setEtcsMode(CUSTOM_ETCS_VALUE);
+      setCustomEtcs(trimmedEtcs);
+    }
+
+    setIsEtcsEditorOpen(false);
+  }, [selectedRow, selectedEtcs, etcsOptions]);
+
   const bloqueoValueToApply = useMemo(() => {
     if (bloqueoMode === CUSTOM_BLOQUEO_VALUE) {
       return customBloqueo.trim();
@@ -315,6 +356,14 @@ export default function RowDetailsPanel({
     return networkMode.trim();
   }, [networkMode, customNetwork]);
 
+  const etcsValueToApply = useMemo(() => {
+    if (etcsMode === CUSTOM_ETCS_VALUE) {
+      return customEtcs.trim();
+    }
+
+    return etcsMode.trim();
+  }, [etcsMode, customEtcs]);
+
   const dependenciaValueToApply = dependenciaDraft.trim();
   const normalizedPkInternalValue = normalizePkDraft(pkInternalDraft);
   const normalizedPkDisplayValue = normalizePkDraft(pkDisplayDraft);
@@ -347,6 +396,61 @@ export default function RowDetailsPanel({
     !selectedRow || networkValueToApply === selectedNetwork.trim();
 
   const isCsvApplyDisabled = !selectedRow || csvDraft === selectedCsv;
+
+  const isEtcsApplyDisabled =
+    !selectedRow || etcsValueToApply === selectedEtcs.trim();
+
+  useEffect(() => {
+    if (!selectedRow || !requestedEditorField) {
+      return;
+    }
+
+    setIsPkInternalEditorOpen(false);
+    setIsNetworkEditorOpen(false);
+    setIsPkDisplayEditorOpen(false);
+    setIsDependenciaEditorOpen(false);
+    setIsCsvEditorOpen(false);
+    setIsBloqueoEditorOpen(false);
+    setIsVmaxEditorOpen(false);
+    setIsRadioEditorOpen(false);
+    setIsRcEditorOpen(false);
+    setIsEtcsEditorOpen(false);
+
+    switch (requestedEditorField) {
+      case "pkInternal":
+        setIsPkInternalEditorOpen(true);
+        break;
+      case "network":
+        setIsNetworkEditorOpen(true);
+        break;
+      case "pkDisplay":
+        setIsPkDisplayEditorOpen(true);
+        break;
+      case "dependencia":
+        setIsDependenciaEditorOpen(true);
+        break;
+      case "csv":
+        setIsCsvEditorOpen(true);
+        break;
+      case "bloqueo":
+        setIsBloqueoEditorOpen(true);
+        break;
+      case "vmax":
+        setIsVmaxEditorOpen(true);
+        break;
+      case "radio":
+        setIsRadioEditorOpen(true);
+        break;
+      case "rc":
+        setIsRcEditorOpen(true);
+        break;
+      case "etcs":
+        setIsEtcsEditorOpen(true);
+        break;
+    }
+
+    onRequestedEditorHandled();
+  }, [selectedRow, requestedEditorField, onRequestedEditorHandled]);
 
   return (
     <div>
@@ -1416,6 +1520,141 @@ export default function RowDetailsPanel({
             </div>
           ) : null}
 
+          <p>
+            ETCS :{" "}
+            <button
+              type="button"
+              onClick={() => setIsEtcsEditorOpen((previous) => !previous)}
+              style={{
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                font: "inherit",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+              title="Cliquer pour éditer ETCS"
+            >
+              <strong>{selectedRow.visible.etcs || "—"}</strong>
+            </button>
+          </p>
+
+          {isEtcsEditorOpen ? (
+            <div
+              style={{
+                marginTop: 12,
+                marginBottom: 12,
+                padding: 12,
+                border: "1px solid #d1d5db",
+                borderRadius: 8,
+                background: "#f9fafb",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Édition ETCS</h3>
+
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 14,
+                  marginBottom: 6,
+                }}
+              >
+                Valeur
+              </label>
+
+              <select
+                value={etcsMode}
+                onChange={(event) => setEtcsMode(event.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  marginBottom: 10,
+                }}
+              >
+                {etcsOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+
+                <option value={CUSTOM_ETCS_VALUE}>
+                  Valeur personnalisée…
+                </option>
+              </select>
+
+              {etcsMode === CUSTOM_ETCS_VALUE ? (
+                <>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: 14,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Valeur personnalisée
+                  </label>
+
+                  <input
+                    type="text"
+                    value={customEtcs}
+                    onChange={(event) => setCustomEtcs(event.target.value)}
+                    placeholder="Laisser vide pour vider ETCS"
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "8px 10px",
+                      marginBottom: 10,
+                    }}
+                  />
+                </>
+              ) : null}
+
+              <div
+                style={{
+                  fontSize: 13,
+                  marginBottom: 10,
+                  color: "#374151",
+                }}
+              >
+                En mode personnalisé, laisser vide puis valider efface la valeur.
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    onApplyEtcs(etcsValueToApply);
+                    setIsEtcsEditorOpen(false);
+                  }}
+                  disabled={isEtcsApplyDisabled}
+                  style={{
+                    padding: "10px 14px",
+                    cursor: isEtcsApplyDisabled ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Valider la modification
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsEtcsEditorOpen(false)}
+                  style={{
+                    padding: "10px 14px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <hr style={{ margin: "16px 0" }} />
 
           <p>
@@ -1454,9 +1693,7 @@ export default function RowDetailsPanel({
 
           <p>
             Source brute :{" "}
-            <strong>
-              {JSON.stringify(selectedRow.debug.sourceRaw)}
-            </strong>
+            <strong>{JSON.stringify(selectedRow.debug.sourceRaw)}</strong>
           </p>
         </>
       )}
