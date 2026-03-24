@@ -391,48 +391,6 @@ export default function FTTable({
     <div className="ft-table-placeholder">
       <div className="ft-table-placeholder__title">Tableau FT</div>
 
-      <div className="ft-table-placeholder__text">
-        Sens sélectionné : <strong>{directionLabel}</strong>
-      </div>
-
-      <div className="ft-table-placeholder__text">
-        Tableau source utilisé : <strong>{sourceArrayName}</strong>
-      </div>
-
-      <div className="ft-table-placeholder__text">
-        État source distante : <strong>{sourceStatus}</strong>
-      </div>
-
-      <div className="ft-table-placeholder__text">
-        Info source : <strong>{remoteInfo}</strong>
-      </div>
-
-      <div className="ft-table-placeholder__text">
-        Diagnostic brut du fichier distant :
-      </div>
-
-      <ul className="ft-table-placeholder__list">
-        {inspectionLines.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
-
-      <div className="ft-table-placeholder__text">
-        Nombre de lignes pour ce sens : <strong>{rowCount}</strong>
-      </div>
-
-      <div className="ft-table-placeholder__text">
-        Aperçu première ligne : <strong>{firstRowPreview}</strong>
-      </div>
-
-      <div className="ft-table-placeholder__text">
-        Aperçu dernière ligne : <strong>{lastRowPreview}</strong>
-      </div>
-
-      <div className="ft-table-placeholder__text">
-        Aperçu tabulaire V0 :
-      </div>
-
       <div className="ft-table-v0-wrapper">
         <table className="ft-table-v0">
           <thead>
@@ -509,7 +467,45 @@ export default function FTTable({
       </div>
 
       <div className="ft-table-placeholder__text">
-        Zone centrale réservée au tableau principal.
+        Sens sélectionné : <strong>{directionLabel}</strong>
+      </div>
+
+      <div className="ft-table-placeholder__text">
+        Tableau source utilisé : <strong>{sourceArrayName}</strong>
+      </div>
+
+      <div className="ft-table-placeholder__text">
+        État source distante : <strong>{sourceStatus}</strong>
+      </div>
+
+      <div className="ft-table-placeholder__text">
+        Info source : <strong>{remoteInfo}</strong>
+      </div>
+
+      <div className="ft-table-placeholder__text">
+        Diagnostic brut du fichier distant :
+      </div>
+
+      <ul className="ft-table-placeholder__list">
+        {inspectionLines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+
+      <div className="ft-table-placeholder__text">
+        Nombre de lignes pour ce sens : <strong>{rowCount}</strong>
+      </div>
+
+      <div className="ft-table-placeholder__text">
+        Aperçu première ligne : <strong>{firstRowPreview}</strong>
+      </div>
+
+      <div className="ft-table-placeholder__text">
+        Aperçu dernière ligne : <strong>{lastRowPreview}</strong>
+      </div>
+
+      <div className="ft-table-placeholder__text">
+        Aperçu tabulaire V0 :
       </div>
     </div>
   );

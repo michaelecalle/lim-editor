@@ -31,6 +31,7 @@ import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRow
 import { areSourceTablesEqual } from "../modules/ft-editor/utils/areSourceTablesEqual";
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
+type EditorTab = "FT" | "HORAIRE" | "LTV";
 
 function getDirectionLabel(direction: EditorDirection): string {
   return direction === "NORD_SUD" ? "Nord → Sud" : "Sud → Nord";
@@ -63,6 +64,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export default function FTEditorPage() {
+  const [activeTab, setActiveTab] = useState<EditorTab>("FT");
   const [direction, setDirection] = useState<EditorDirection>("NORD_SUD");
   const [sourceStatus, setSourceStatus] = useState<SourceStatus>("idle");
   const [remoteInfo, setRemoteInfo] = useState<string>(
@@ -890,76 +892,164 @@ export default function FTEditorPage() {
       }
       tableArea={
         <>
-          <FTTable
-            directionLabel={directionLabel}
-            sourceStatus={sourceStatus}
-            remoteInfo={remoteInfo}
-            inspectionLines={inspectionLines}
-            sourceArrayName={sourceTableLabel}
-            rowCount={sourceRows.length}
-            firstRowPreview={firstRowPreview}
-            lastRowPreview={lastRowPreview}
-            rows={sourceRows}
-            selectedRowId={selectedRowId}
-            onRowSelect={(row) => {
-              setSelectedRowId(row.id);
-              setRequestedEditorField(null);
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 16,
+              flexWrap: "wrap",
             }}
-            onCellEditRequest={(row, field) => {
-              setSelectedRowId(row.id);
-              setRequestedEditorField(field);
-            }}
-          />
+          >
+            {[
+              { id: "FT" as const, label: "Tableau FT" },
+              { id: "HORAIRE" as const, label: "Tableau horaire" },
+              { id: "LTV" as const, label: "LTV" },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
 
-          <EditorStatusBanner
-            title="Diagnostic export local"
-            message={
-              hasUnpublishedChanges
-                ? `${exportMessage} Modifications locales non publiées détectées.`
-                : `${exportMessage} Aucune modification locale non publiée.`
-            }
-            tone={
-              exportStatus === "success"
-                ? "success"
-                : exportStatus === "error"
-                  ? "error"
-                  : hasUnpublishedChanges
-                    ? "warning"
-                    : "neutral"
-            }
-            details={
-              exportDiagnostics.length > 0
-                ? exportDiagnostics
-                : ["Aucun diagnostic d’export disponible pour l’instant."]
-            }
-          />
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: isActive ? "1px solid #2563eb" : "1px solid #d1d5db",
+                    background: isActive ? "#dbeafe" : "#ffffff",
+                    color: "#111827",
+                    fontWeight: isActive ? 700 : 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTab === "FT" ? (
+            <>
+              <FTTable
+                directionLabel={directionLabel}
+                sourceStatus={sourceStatus}
+                remoteInfo={remoteInfo}
+                inspectionLines={inspectionLines}
+                sourceArrayName={sourceTableLabel}
+                rowCount={sourceRows.length}
+                firstRowPreview={firstRowPreview}
+                lastRowPreview={lastRowPreview}
+                rows={sourceRows}
+                selectedRowId={selectedRowId}
+                onRowSelect={(row) => {
+                  setSelectedRowId(row.id);
+                  setRequestedEditorField(null);
+                }}
+                onCellEditRequest={(row, field) => {
+                  setSelectedRowId(row.id);
+                  setRequestedEditorField(field);
+                }}
+              />
+
+              <EditorStatusBanner
+                title="Diagnostic export local"
+                message={
+                  hasUnpublishedChanges
+                    ? `${exportMessage} Modifications locales non publiées détectées.`
+                    : `${exportMessage} Aucune modification locale non publiée.`
+                }
+                tone={
+                  exportStatus === "success"
+                    ? "success"
+                    : exportStatus === "error"
+                      ? "error"
+                      : hasUnpublishedChanges
+                        ? "warning"
+                        : "neutral"
+                }
+                details={
+                  exportDiagnostics.length > 0
+                    ? exportDiagnostics
+                    : ["Aucun diagnostic d’export disponible pour l’instant."]
+                }
+              />
+            </>
+          ) : activeTab === "HORAIRE" ? (
+            <div
+              style={{
+                padding: 24,
+                border: "1px dashed #9ca3af",
+                borderRadius: 16,
+                background: "#ffffff",
+                color: "#4b5563",
+              }}
+            >
+              <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>
+                Tableau horaire
+              </div>
+              <div>Onglet créé. Contenu à venir.</div>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: 24,
+                border: "1px dashed #9ca3af",
+                borderRadius: 16,
+                background: "#ffffff",
+                color: "#4b5563",
+              }}
+            >
+              <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>
+                LTV
+              </div>
+              <div>Onglet créé. Contenu à venir.</div>
+            </div>
+          )}
         </>
       }
       detailsPanel={
-        <RowDetailsPanel
-          directionLabel={directionLabel}
-          sourceStatus={sourceStatus}
-          rowCount={sourceRows.length}
-          selectedRow={selectedRow}
-          requestedEditorField={requestedEditorField}
-          onRequestedEditorHandled={() => setRequestedEditorField(null)}
-          bloqueoOptions={bloqueoOptions}
-          onApplyBloqueo={handleApplyBloqueo}
-          vmaxOptions={vmaxOptions}
-          onApplyVmax={handleApplyVmax}
-          rcOptions={rcOptions}
-          onApplyRc={handleApplyRc}
-          radioOptions={radioOptions}
-          onApplyRadio={handleApplyRadio}
-          onApplyDependencia={handleApplyDependencia}
-          onApplyPkInternal={handleApplyPkInternal}
-          onApplyPkDisplay={handleApplyPkDisplay}
-          networkOptions={networkOptions}
-          onApplyNetwork={handleApplyNetwork}
-          onApplyCsv={handleApplyCsv}
-          etcsOptions={etcsOptions}
-          onApplyEtcs={handleApplyEtcs}
-        />
+        activeTab === "FT" ? (
+          <RowDetailsPanel
+            directionLabel={directionLabel}
+            sourceStatus={sourceStatus}
+            rowCount={sourceRows.length}
+            selectedRow={selectedRow}
+            requestedEditorField={requestedEditorField}
+            onRequestedEditorHandled={() => setRequestedEditorField(null)}
+            bloqueoOptions={bloqueoOptions}
+            onApplyBloqueo={handleApplyBloqueo}
+            vmaxOptions={vmaxOptions}
+            onApplyVmax={handleApplyVmax}
+            rcOptions={rcOptions}
+            onApplyRc={handleApplyRc}
+            radioOptions={radioOptions}
+            onApplyRadio={handleApplyRadio}
+            onApplyDependencia={handleApplyDependencia}
+            onApplyPkInternal={handleApplyPkInternal}
+            onApplyPkDisplay={handleApplyPkDisplay}
+            networkOptions={networkOptions}
+            onApplyNetwork={handleApplyNetwork}
+            onApplyCsv={handleApplyCsv}
+            etcsOptions={etcsOptions}
+            onApplyEtcs={handleApplyEtcs}
+          />
+        ) : (
+          <div
+            style={{
+              padding: 20,
+              border: "1px dashed #d1d5db",
+              borderRadius: 16,
+              color: "#4b5563",
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+              Panneau latéral
+            </div>
+            <div>
+              Aucun panneau spécifique pour cet onglet pour le moment.
+            </div>
+          </div>
+        )
       }
       />
     </>

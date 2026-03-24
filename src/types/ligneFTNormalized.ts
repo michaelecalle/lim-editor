@@ -2,6 +2,7 @@ export type FtLineType = "data" | "note";
 
 export type FtLineCommon = {
   id: string;
+  rowKey?: string;
   type: FtLineType;
 
   reseau: string;
