@@ -135,6 +135,7 @@ function evaluateObjectLiteral(objectLiteral: string): FtSourceDirectionTables {
   const record = value as Record<string, unknown>;
   const nordSud = record["nordSud"];
   const sudNord = record["sudNord"];
+  const trains = record["trains"];
 
   if (typeof nordSud !== "object" || nordSud === null || Array.isArray(nordSud)) {
     throw new Error('Le tableau "nordSud" est introuvable ou invalide.');
@@ -142,6 +143,13 @@ function evaluateObjectLiteral(objectLiteral: string): FtSourceDirectionTables {
 
   if (typeof sudNord !== "object" || sudNord === null || Array.isArray(sudNord)) {
     throw new Error('Le tableau "sudNord" est introuvable ou invalide.');
+  }
+
+  if (
+    trains != null &&
+    (typeof trains !== "object" || Array.isArray(trains))
+  ) {
+    throw new Error('Le champ "trains" est invalide.');
   }
 
   const nordSudRows = (nordSud as Record<string, unknown>)["rows"];
@@ -162,6 +170,8 @@ function evaluateObjectLiteral(objectLiteral: string): FtSourceDirectionTables {
     sudNord: {
       rows: sudNordRows,
     },
+    trains:
+      trains != null ? (trains as FtSourceDirectionTables["trains"]) : undefined,
   };
 }
 

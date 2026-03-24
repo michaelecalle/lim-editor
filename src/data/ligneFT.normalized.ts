@@ -2108,5 +2108,49 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "etcs": ""
       }
     ]
+  },
+  "trains": {
+    "9712": {
+      "meta": {
+        "origine": "",
+        "destination": ""
+      },
+      "byRowKey": {}
+    },
+    "9714": {
+      "meta": {
+        "origine": "",
+        "destination": ""
+      },
+      "byRowKey": {}
+    },
+    "38510": {
+      "meta": {
+        "origine": "",
+        "destination": ""
+      },
+      "byRowKey": {}
+    },
+    "9709": {
+      "meta": {
+        "origine": "",
+        "destination": ""
+      },
+      "byRowKey": {}
+    },
+    "9707": {
+      "meta": {
+        "origine": "",
+        "destination": ""
+      },
+      "byRowKey": {}
+    },
+    "39819": {
+      "meta": {
+        "origine": "",
+        "destination": ""
+      },
+      "byRowKey": {}
+    }
   }
 };
