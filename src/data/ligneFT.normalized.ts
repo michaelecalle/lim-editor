@@ -991,7 +991,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "bloqueo": "BAL KVB",
         "vmax": "160",
         "sitKm": "805.5",
-        "dependencia": "PERPINYA",
+        "dependencia": "PERPIGNAN",
         "radio": "◯ GSMR",
         "rampCaract": "10",
         "csv": false,
