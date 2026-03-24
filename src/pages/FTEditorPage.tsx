@@ -768,11 +768,12 @@ export default function FTEditorPage() {
       setReferenceData(parsedSource);
       setExportStatus("success");
       setExportMessage(
-        `Publication réussie : fichier actif mis à jour, archive créée ${response.diagnostic.archiveCreated.name}.`
+        `Publication réussie : fichier actif mis à jour dans LIM Editor et JSON actif publié aussi vers LIM2, archive créée ${response.diagnostic.archiveCreated.name}.`
       );
       setExportDiagnostics([
-        `Fichier TS publié : ${response.diagnostic.publishedPath}`,
-        `Fichier JSON publié : ${response.diagnostic.publishedJsonPath}`,
+        `Fichier TS publié dans LIM Editor : ${response.diagnostic.publishedPath}`,
+        `Fichier JSON publié dans LIM Editor : ${response.diagnostic.publishedJsonPath}`,
+        `Fichier JSON publié dans LIM2 : ${response.diagnostic.publishedLim2JsonPath}`,
         `Archive créée : ${response.diagnostic.archiveCreated.path}`,
         response.diagnostic.purgedArchives.length > 0
           ? `Archives purgées : ${response.diagnostic.purgedArchives.join(", ")}`

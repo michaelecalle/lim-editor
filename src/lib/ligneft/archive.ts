@@ -260,6 +260,7 @@ export async function publishNormalizedData(
   return {
     publishedPath: ACTIVE_FILE_PATH,
     publishedJsonPath: ACTIVE_JSON_FILE_PATH,
+    publishedLim2JsonPath: ACTIVE_JSON_FILE_PATH,
     archiveCreated: {
       name: archiveCreated.name,
       path: archiveCreated.path,
