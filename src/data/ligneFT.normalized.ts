@@ -988,7 +988,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "pkAdif": "",
         "pkLfp": "",
         "pkRfn": "467.5",
-        "bloqueo": "ERTMS Niv. 1",
+        "bloqueo": "BAL KVB",
         "vmax": "160",
         "sitKm": "805.5",
         "dependencia": "PERPIGNAN",
