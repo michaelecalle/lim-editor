@@ -2,6 +2,7 @@ import type { LigneFTNormalized } from "../../types/ligneFTNormalized";
 import type { LigneFtArchiveItem, LigneFtPublishDiagnostic } from "../../types/ligneft-api";
 import {
   ACTIVE_FILE_PATH,
+  ACTIVE_JSON_FILE_PATH,
   ARCHIVES_DIR_PATH,
   MAX_ARCHIVES,
 } from "./constants.js";
@@ -48,6 +49,28 @@ function buildArchiveJsonFile(data: LigneFTNormalized): string {
   return `${JSON.stringify(data, null, 2)}\n`;
 }
 
+async function loadOptionalGithubFileSha(
+  path: string,
+  target: "editor" | "lim2" = "editor",
+): Promise<string | null> {
+  try {
+    const file = await githubGetFile(path, target);
+    return file.sha;
+  } catch (error) {
+    if (
+      error instanceof LigneFtGithubError &&
+      typeof error.details === "object" &&
+      error.details !== null &&
+      "message" in error.details &&
+      (error.details as { message?: unknown }).message === "Not Found"
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 export async function loadActiveFile(): Promise<{
   name: string;
   path: string;
@@ -55,7 +78,7 @@ export async function loadActiveFile(): Promise<{
   content: string;
   data: LigneFTNormalized;
 }> {
-  const file = await githubGetFile(ACTIVE_FILE_PATH);
+  const file = await githubGetFile(ACTIVE_FILE_PATH, "editor");
   const data = parseAndValidateNormalizedTs(file.content);
 
   return {
@@ -71,7 +94,7 @@ export async function listArchives(): Promise<LigneFtArchiveItem[]> {
   let entries: Awaited<ReturnType<typeof githubListDirectory>>;
 
   try {
-    entries = await githubListDirectory(ARCHIVES_DIR_PATH);
+    entries = await githubListDirectory(ARCHIVES_DIR_PATH, "editor");
   } catch (error) {
     if (
       error instanceof LigneFtGithubError &&
@@ -113,7 +136,7 @@ export async function loadArchive(name: string): Promise<{
   const path = `${ARCHIVES_DIR_PATH}/${name}`;
 
   try {
-    const file = await githubGetFile(path);
+    const file = await githubGetFile(path, "editor");
     const data = parseAndValidateArchiveJson(file.content);
 
     return {
@@ -152,6 +175,8 @@ export async function createArchiveFromActiveFile(date = new Date()): Promise<{
     archivePath,
     archiveContent,
     `Archive active ligneFT.normalized.ts as ${archiveName}`,
+    undefined,
+    "editor",
   );
 
   return {
@@ -178,6 +203,7 @@ export async function purgeOldArchives(
       archive.path,
       `Delete old ligneFT archive ${archive.name}`,
       archive.sha,
+      "editor",
     );
     deletedNames.push(archive.name);
   }
@@ -190,22 +216,50 @@ export async function publishNormalizedData(
 ): Promise<LigneFtPublishDiagnostic> {
   assertValidNormalizedData(data);
 
-  const activeFile = await githubGetFile(ACTIVE_FILE_PATH);
+  const normalizedData = data as LigneFTNormalized;
+  const activeFile = await githubGetFile(ACTIVE_FILE_PATH, "editor");
+  const activeJsonFileSha = await loadOptionalGithubFileSha(
+    ACTIVE_JSON_FILE_PATH,
+    "editor",
+  );
+  const lim2JsonFileSha = await loadOptionalGithubFileSha(
+    ACTIVE_JSON_FILE_PATH,
+    "lim2",
+  );
 
   const archiveCreated = await createArchiveFromActiveFile();
-  const nextContent = buildNormalizedTsFile(data);
+  const nextTsContent = buildNormalizedTsFile(normalizedData);
+  const nextJsonContent = buildArchiveJsonFile(normalizedData);
 
   await githubPutFile(
     ACTIVE_FILE_PATH,
-    nextContent,
+    nextTsContent,
     "Publish updated ligneFT.normalized.ts",
     activeFile.sha,
+    "editor",
+  );
+
+  await githubPutFile(
+    ACTIVE_JSON_FILE_PATH,
+    nextJsonContent,
+    "Publish updated ligneFT.normalized.json",
+    activeJsonFileSha ?? undefined,
+    "editor",
+  );
+
+  await githubPutFile(
+    ACTIVE_JSON_FILE_PATH,
+    nextJsonContent,
+    "Publish updated ligneFT.normalized.json for LIM2",
+    lim2JsonFileSha ?? undefined,
+    "lim2",
   );
 
   const purgedArchives = await purgeOldArchives(MAX_ARCHIVES);
 
   return {
     publishedPath: ACTIVE_FILE_PATH,
+    publishedJsonPath: ACTIVE_JSON_FILE_PATH,
     archiveCreated: {
       name: archiveCreated.name,
       path: archiveCreated.path,

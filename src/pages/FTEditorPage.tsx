@@ -771,7 +771,8 @@ export default function FTEditorPage() {
         `Publication réussie : fichier actif mis à jour, archive créée ${response.diagnostic.archiveCreated.name}.`
       );
       setExportDiagnostics([
-        `Fichier publié : ${response.diagnostic.publishedPath}`,
+        `Fichier TS publié : ${response.diagnostic.publishedPath}`,
+        `Fichier JSON publié : ${response.diagnostic.publishedJsonPath}`,
         `Archive créée : ${response.diagnostic.archiveCreated.path}`,
         response.diagnostic.purgedArchives.length > 0
           ? `Archives purgées : ${response.diagnostic.purgedArchives.join(", ")}`

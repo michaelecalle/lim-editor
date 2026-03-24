@@ -1,6 +1,8 @@
 import { DEFAULT_GITHUB_BRANCH } from "./constants.js";
 import { LigneFtConfigurationError, LigneFtGithubError } from "./errors.js";
 
+export type GithubTarget = "editor" | "lim2";
+
 type GithubConfig = {
   token: string;
   owner: string;
@@ -36,14 +38,37 @@ function getRequiredEnv(name: string): string {
   return value.trim();
 }
 
-function buildGithubApiUrl(path: string): string {
-  const { owner, repo } = getGithubConfig();
+function getGithubEnvNames(target: GithubTarget): {
+  token: string;
+  owner: string;
+  repo: string;
+  branch: string;
+} {
+  if (target === "editor") {
+    return {
+      token: "LIGNEFT_EDITOR_GITHUB_TOKEN",
+      owner: "LIGNEFT_EDITOR_GITHUB_OWNER",
+      repo: "LIGNEFT_EDITOR_GITHUB_REPO",
+      branch: "LIGNEFT_EDITOR_GITHUB_BRANCH",
+    };
+  }
+
+  return {
+    token: "LIGNEFT_LIM2_GITHUB_TOKEN",
+    owner: "LIGNEFT_LIM2_GITHUB_OWNER",
+    repo: "LIGNEFT_LIM2_GITHUB_REPO",
+    branch: "LIGNEFT_LIM2_GITHUB_BRANCH",
+  };
+}
+
+function buildGithubApiUrl(path: string, target: GithubTarget = "editor"): string {
+  const { owner, repo } = getGithubConfig(target);
   const normalizedPath = path.replace(/^\/+/, "");
   return `https://api.github.com/repos/${owner}/${repo}/contents/${normalizedPath}`;
 }
 
-function buildHeaders(): HeadersInit {
-  const { token } = getGithubConfig();
+function buildHeaders(target: GithubTarget = "editor"): HeadersInit {
+  const { token } = getGithubConfig(target);
 
   return {
     Accept: "application/vnd.github+json",
@@ -72,17 +97,20 @@ async function parseGithubError(response: Response): Promise<never> {
   );
 }
 
-export function getGithubConfig(): GithubConfig {
+export function getGithubConfig(target: GithubTarget = "editor"): GithubConfig {
+  const envNames = getGithubEnvNames(target);
+
   return {
-    token: getRequiredEnv("GITHUB_TOKEN"),
-    owner: getRequiredEnv("GITHUB_OWNER"),
-    repo: getRequiredEnv("GITHUB_REPO"),
-    branch: process.env.GITHUB_BRANCH?.trim() || DEFAULT_GITHUB_BRANCH,
+    token: getRequiredEnv(envNames.token),
+    owner: getRequiredEnv(envNames.owner),
+    repo: getRequiredEnv(envNames.repo),
+    branch: process.env[envNames.branch]?.trim() || DEFAULT_GITHUB_BRANCH,
   };
 }
 
 export async function githubGetFile(
   path: string,
+  target: GithubTarget = "editor",
 ): Promise<{
   path: string;
   name: string;
@@ -90,14 +118,14 @@ export async function githubGetFile(
   size: number;
   content: string;
 }> {
-  const { branch } = getGithubConfig();
+  const { branch } = getGithubConfig(target);
 
-  const url = new URL(buildGithubApiUrl(path));
+  const url = new URL(buildGithubApiUrl(path, target));
   url.searchParams.set("ref", branch);
 
   const response = await fetch(url.toString(), {
     method: "GET",
-    headers: buildHeaders(),
+    headers: buildHeaders(target),
     cache: "no-store",
   });
 
@@ -131,15 +159,16 @@ export async function githubPutFile(
   content: string,
   message: string,
   sha?: string,
+  target: GithubTarget = "editor",
 ): Promise<{
   path: string;
   sha: string;
 }> {
-  const { branch } = getGithubConfig();
+  const { branch } = getGithubConfig(target);
 
-  const response = await fetch(buildGithubApiUrl(path), {
+  const response = await fetch(buildGithubApiUrl(path, target), {
     method: "PUT",
-    headers: buildHeaders(),
+    headers: buildHeaders(target),
     body: JSON.stringify({
       message,
       content: Buffer.from(content, "utf-8").toString("base64"),
@@ -173,12 +202,13 @@ export async function githubDeleteFile(
   path: string,
   message: string,
   sha: string,
+  target: GithubTarget = "editor",
 ): Promise<void> {
-  const { branch } = getGithubConfig();
+  const { branch } = getGithubConfig(target);
 
-  const response = await fetch(buildGithubApiUrl(path), {
+  const response = await fetch(buildGithubApiUrl(path, target), {
     method: "DELETE",
-    headers: buildHeaders(),
+    headers: buildHeaders(target),
     body: JSON.stringify({
       message,
       sha,
@@ -193,15 +223,16 @@ export async function githubDeleteFile(
 
 export async function githubListDirectory(
   path: string,
+  target: GithubTarget = "editor",
 ): Promise<GithubContentDirectoryItem[]> {
-  const { branch } = getGithubConfig();
+  const { branch } = getGithubConfig(target);
 
-  const url = new URL(buildGithubApiUrl(path));
+  const url = new URL(buildGithubApiUrl(path, target));
   url.searchParams.set("ref", branch);
 
   const response = await fetch(url.toString(), {
     method: "GET",
-    headers: buildHeaders(),
+    headers: buildHeaders(target),
     cache: "no-store",
   });
 

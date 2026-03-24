@@ -22,6 +22,7 @@ export type LigneFtArchiveResponse = {
 
 export type LigneFtPublishDiagnostic = {
   publishedPath: string;
+  publishedJsonPath: string;
   archiveCreated: {
     name: string;
     path: string;

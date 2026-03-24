@@ -16,6 +16,7 @@ export type FtLineCommon = {
   sitKm: string;
   dependencia: string;
   radio: string;
+  etcs: string;
   rampCaract: string;
 
   csv: boolean;
