@@ -1,12 +1,16 @@
 import "./FTTable.css";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type {
   EditorDirectField,
   EditorFtRowView,
 } from "../../modules/ft-editor/types/viewTypes";
-import { FT_COLUMNS } from "../../modules/ft-editor/constants/ftColumns";
+import {
+  FT_COLUMNS,
+  type FTColumnKey,
+} from "../../modules/ft-editor/constants/ftColumns";
 
 type FTTableProps = {
+  title?: string;
   directionLabel: string;
   sourceStatus: "idle" | "loading" | "success" | "error";
   remoteInfo: string;
@@ -16,19 +20,78 @@ type FTTableProps = {
   firstRowPreview: string;
   lastRowPreview: string;
   rows: EditorFtRowView[];
+  columns?: readonly FTColumnKey[];
+  dimHoraireColumns?: boolean;
   selectedRowId: string | null;
   onRowSelect: (row: EditorFtRowView) => void;
   onCellEditRequest: (
     row: EditorFtRowView,
     field: EditorDirectField | null
   ) => void;
+  onInlineComCommit?: (rowId: string, nextCom: string) => void;
+  onInlineHoraCommit?: (rowId: string, nextHora: string) => void;
+  onInlineTecnCommit?: (rowId: string, nextTecn: string) => void;
+  onInlineConcCommit?: (rowId: string, nextConc: string) => void;
 };
 
 const NOTE_START_COLUMN_INDEX = 5;
 
-function getDirectFieldForColumn(
-  column: (typeof FT_COLUMNS)[number]
-): EditorDirectField | null {
+function sanitizePositiveIntegerInput(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function normalizePositiveIntegerValue(value: string): string {
+  const digits = sanitizePositiveIntegerInput(value);
+
+  if (digits === "") {
+    return "";
+  }
+
+  const normalized = String(Number(digits));
+
+  if (normalized === "0") {
+    return "";
+  }
+
+  return normalized;
+}
+
+function sanitizeNonNegativeIntegerInput(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function normalizeNonNegativeIntegerValue(value: string): string {
+  const digits = sanitizeNonNegativeIntegerInput(value);
+
+  if (digits === "") {
+    return "";
+  }
+
+  return String(Number(digits));
+}
+
+function sanitizeHoraInput(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 4);
+}
+
+function formatHoraDigits(value: string): string {
+  const digits = sanitizeHoraInput(value);
+
+  if (digits.length === 0) {
+    return "";
+  }
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  const minutes = digits.slice(-2);
+  const hours = digits.slice(0, -2);
+
+  return `${hours}:${minutes}`;
+}
+
+function getDirectFieldForColumn(column: FTColumnKey): EditorDirectField | null {
   switch (column) {
     case "PK interne":
       return "pkInternal";
@@ -53,10 +116,7 @@ function getDirectFieldForColumn(
   }
 }
 
-function getRawCellValue(
-  row: EditorFtRowView,
-  column: (typeof FT_COLUMNS)[number]
-): string {
+function getRawCellValue(row: EditorFtRowView, column: FTColumnKey): string {
   switch (column) {
     case "PK interne":
       return row.visible.pkInternalDisplay;
@@ -89,12 +149,21 @@ function getRawCellValue(
   }
 }
 
-function isBarColumn(column: (typeof FT_COLUMNS)[number]): boolean {
+function isBarColumn(column: FTColumnKey): boolean {
   return (
     column === "Réseau" ||
     column === "Bloqueo" ||
     column === "V Max" ||
     column === "Ramp Caract"
+  );
+}
+
+function isHoraireColumn(column: FTColumnKey): boolean {
+  return (
+    column === "Com" ||
+    column === "Hora" ||
+    column === "Técn" ||
+    column === "Conc"
   );
 }
 
@@ -264,7 +333,7 @@ function buildCalculatedBloqueoBarMap(
 
 function hasBarForColumn(
   row: EditorFtRowView,
-  column: (typeof FT_COLUMNS)[number],
+  column: FTColumnKey,
   calculatedNetworkBarMap: Record<string, boolean>,
   calculatedRcBarMap: Record<string, boolean>,
   calculatedVmaxBarMap: Record<string, boolean>,
@@ -286,9 +355,10 @@ function hasBarForColumn(
 
 function getRenderedCellValue(
   row: EditorFtRowView,
-  column: (typeof FT_COLUMNS)[number],
+  column: FTColumnKey,
   effectiveVmaxMap: Record<string, string>,
-  effectiveBloqueoMap: Record<string, string>
+  effectiveBloqueoMap: Record<string, string>,
+  inlineHoraValues: Record<string, string>
 ): string {
   if (column === "V Max") {
     return effectiveVmaxMap[row.id] ?? "";
@@ -298,24 +368,34 @@ function getRenderedCellValue(
     return effectiveBloqueoMap[row.id] ?? "";
   }
 
+  if (column === "Hora") {
+    const inlineValue = inlineHoraValues[row.id];
+
+    if (inlineValue !== undefined) {
+      return inlineValue;
+    }
+  }
+
   return getRawCellValue(row, column);
 }
 
 function renderCellContent(
   row: EditorFtRowView,
-  column: (typeof FT_COLUMNS)[number],
+  column: FTColumnKey,
   calculatedNetworkBarMap: Record<string, boolean>,
   calculatedRcBarMap: Record<string, boolean>,
   calculatedVmaxBarMap: Record<string, boolean>,
   calculatedBloqueoBarMap: Record<string, boolean>,
   effectiveVmaxMap: Record<string, string>,
-  effectiveBloqueoMap: Record<string, string>
+  effectiveBloqueoMap: Record<string, string>,
+  inlineHoraValues: Record<string, string>
 ): ReactNode {
   const value = getRenderedCellValue(
     row,
     column,
     effectiveVmaxMap,
-    effectiveBloqueoMap
+    effectiveBloqueoMap,
+    inlineHoraValues
   );
   const hasBar = hasBarForColumn(
     row,
@@ -343,7 +423,9 @@ function renderCellContent(
 
   if (hasBar && isBarColumn(column)) {
     return (
-      <div className={isCsvVmaxCell ? "ft-cell-stack ft-cell-stack--csv-vmax" : undefined}>
+      <div
+        className={isCsvVmaxCell ? "ft-cell-stack ft-cell-stack--csv-vmax" : undefined}
+      >
         <div className="ft-cell-bar" />
       </div>
     );
@@ -357,10 +439,15 @@ function renderCellContent(
     );
   }
 
-  return isCsvVmaxCell ? <span className="ft-cell-text--csv-vmax">{value}</span> : value;
+  return isCsvVmaxCell ? (
+    <span className="ft-cell-text--csv-vmax">{value}</span>
+  ) : (
+    value
+  );
 }
 
 export default function FTTable({
+  title = "Tableau FT",
   directionLabel,
   sourceStatus,
   remoteInfo,
@@ -370,9 +457,15 @@ export default function FTTable({
   firstRowPreview,
   lastRowPreview,
   rows,
+  columns = FT_COLUMNS,
+  dimHoraireColumns = true,
   selectedRowId,
   onRowSelect,
   onCellEditRequest,
+  onInlineComCommit,
+  onInlineHoraCommit,
+  onInlineTecnCommit,
+  onInlineConcCommit,
 }: FTTableProps) {
   const calculatedNetworkBarMap = buildCalculatedNetworkBarMap(rows);
   const calculatedRcBarMap = buildCalculatedRcBarMap(rows);
@@ -386,18 +479,40 @@ export default function FTTable({
     rows,
     effectiveBloqueoMap
   );
+  const displayedColumns = columns;
+  const [editingCell, setEditingCell] = useState<{
+    rowId: string;
+    column: "Com" | "Hora" | "Técn" | "Conc";
+  } | null>(null);
+  const [editingInlineInput, setEditingInlineInput] = useState("");
 
   return (
     <div className="ft-table-placeholder">
-      <div className="ft-table-placeholder__title">Tableau FT</div>
+      <div className="ft-table-placeholder__title">{title}</div>
 
       <div className="ft-table-v0-wrapper">
         <table className="ft-table-v0">
           <thead>
             <tr>
-              {FT_COLUMNS.map((column) => (
-                <th key={column}>{column}</th>
-              ))}
+              {displayedColumns.map((column) => {
+                const dimCell = dimHoraireColumns && isHoraireColumn(column);
+
+                return (
+                  <th
+                    key={column}
+                    style={
+                      dimCell
+                        ? {
+                            background: "#e5e7eb",
+                            color: "#6b7280",
+                          }
+                        : undefined
+                    }
+                  >
+                    {column}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 
@@ -413,15 +528,17 @@ export default function FTTable({
                     className={`ft-table-v0__note-row ${rowClassName}`.trim()}
                     onClick={() => onRowSelect(row)}
                   >
-                    {FT_COLUMNS.slice(0, NOTE_START_COLUMN_INDEX).map((column) => (
-                      <td
-                        key={`${row.id}-${column}-empty-note-prefix`}
-                        className="ft-note-prefix-cell"
-                      />
-                    ))}
+                    {displayedColumns
+                      .slice(0, NOTE_START_COLUMN_INDEX)
+                      .map((column) => (
+                        <td
+                          key={`${row.id}-${column}-empty-note-prefix`}
+                          className="ft-note-prefix-cell"
+                        />
+                      ))}
 
                     <td
-                      colSpan={FT_COLUMNS.length - NOTE_START_COLUMN_INDEX}
+                      colSpan={displayedColumns.length - NOTE_START_COLUMN_INDEX}
                       className="ft-note-cell"
                     >
                       <div className="ft-note-row-content">
@@ -438,27 +555,246 @@ export default function FTTable({
                   className={rowClassName}
                   onClick={() => onRowSelect(row)}
                 >
-                  {FT_COLUMNS.map((column) => (
-                    <td
-                      key={`${row.id}-${column}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onCellEditRequest(row, getDirectFieldForColumn(column));
-                      }}
-                      style={{ cursor: "pointer" }}
-                    >
-                      {renderCellContent(
-                        row,
-                        column,
-                        calculatedNetworkBarMap,
-                        calculatedRcBarMap,
-                        calculatedVmaxBarMap,
-                        calculatedBloqueoBarMap,
-                        effectiveVmaxMap,
-                        effectiveBloqueoMap
-                      )}
-                    </td>
-                  ))}
+                  {displayedColumns.map((column) => {
+                    const isHoraire = isHoraireColumn(column);
+                    const dimCell = dimHoraireColumns && isHoraire;
+                    const directField = getDirectFieldForColumn(column);
+                    const isInlineComEditable = column === "Com" && !dimCell;
+                    const isInlineHoraEditable = column === "Hora" && !dimCell;
+                    const isInlineTecnEditable = column === "Técn" && !dimCell;
+                    const isInlineConcEditable = column === "Conc" && !dimCell;
+                    const isInlineEditable =
+                      isInlineComEditable ||
+                      isInlineHoraEditable ||
+                      isInlineTecnEditable ||
+                      isInlineConcEditable;
+                    const isEditingInline =
+                      editingCell != null &&
+                      editingCell.rowId === row.id &&
+                      editingCell.column === column;
+
+                    return (
+                      <td
+                        key={`${row.id}-${column}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          if (dimCell) {
+                            return;
+                          }
+
+                          if (isInlineComEditable) {
+                            const currentValue = row.visible.com ?? "";
+
+                            setEditingCell({ rowId: row.id, column: "Com" });
+                            setEditingInlineInput(
+                              sanitizePositiveIntegerInput(currentValue)
+                            );
+                            onRowSelect(row);
+                            return;
+                          }
+
+                          if (isInlineHoraEditable) {
+                            const currentValue = row.visible.hora ?? "";
+
+                            setEditingCell({ rowId: row.id, column: "Hora" });
+                            setEditingInlineInput(
+                              sanitizeHoraInput(currentValue)
+                            );
+                            onRowSelect(row);
+                            return;
+                          }
+
+                          if (isInlineTecnEditable) {
+                            const currentValue = row.visible.tecn ?? "";
+
+                            setEditingCell({ rowId: row.id, column: "Técn" });
+                            setEditingInlineInput(
+                              sanitizePositiveIntegerInput(currentValue)
+                            );
+                            onRowSelect(row);
+                            return;
+                          }
+
+                          if (isInlineConcEditable) {
+                            const currentValue = row.visible.conc ?? "";
+
+                            setEditingCell({ rowId: row.id, column: "Conc" });
+                            setEditingInlineInput(
+                              sanitizeNonNegativeIntegerInput(currentValue)
+                            );
+                            onRowSelect(row);
+                            return;
+                          }
+
+                          onCellEditRequest(row, directField);
+                        }}
+                        style={
+                          dimCell
+                            ? {
+                                cursor: "default",
+                                background: "#f3f4f6",
+                                color: "#6b7280",
+                              }
+                            : isInlineEditable
+                              ? { cursor: "text" }
+                              : { cursor: "pointer" }
+                        }
+                      >
+                        {isEditingInline ? (
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoFocus
+                            value={editingInlineInput}
+                            onChange={(event) => {
+                              if (column === "Hora") {
+                                setEditingInlineInput(
+                                  sanitizeHoraInput(event.target.value)
+                                );
+                                return;
+                              }
+
+                              if (column === "Conc") {
+                                setEditingInlineInput(
+                                  sanitizeNonNegativeIntegerInput(
+                                    event.target.value
+                                  )
+                                );
+                                return;
+                              }
+
+                              setEditingInlineInput(
+                                sanitizePositiveIntegerInput(event.target.value)
+                              );
+                            }}
+                            onBlur={() => {
+                              if (column === "Com") {
+                                const normalizedValue =
+                                  normalizePositiveIntegerValue(
+                                    editingInlineInput
+                                  );
+
+                                onInlineComCommit?.(row.id, normalizedValue);
+                                setEditingCell(null);
+                                setEditingInlineInput("");
+                                return;
+                              }
+
+                              if (column === "Hora") {
+                                const formattedValue =
+                                  formatHoraDigits(editingInlineInput);
+
+                                onInlineHoraCommit?.(row.id, formattedValue);
+                                setEditingCell(null);
+                                setEditingInlineInput("");
+                                return;
+                              }
+
+                              if (column === "Técn") {
+                                const normalizedValue =
+                                  normalizePositiveIntegerValue(
+                                    editingInlineInput
+                                  );
+
+                                onInlineTecnCommit?.(row.id, normalizedValue);
+                                setEditingCell(null);
+                                setEditingInlineInput("");
+                                return;
+                              }
+
+                              if (column === "Conc") {
+                                const normalizedValue =
+                                  normalizeNonNegativeIntegerValue(
+                                    editingInlineInput
+                                  );
+
+                                onInlineConcCommit?.(row.id, normalizedValue);
+                                setEditingCell(null);
+                                setEditingInlineInput("");
+                              }
+                            }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                if (column === "Com") {
+                                  const normalizedValue =
+                                    normalizePositiveIntegerValue(
+                                      editingInlineInput
+                                    );
+
+                                  onInlineComCommit?.(row.id, normalizedValue);
+                                  setEditingCell(null);
+                                  setEditingInlineInput("");
+                                  return;
+                                }
+
+                                if (column === "Hora") {
+                                  const formattedValue =
+                                    formatHoraDigits(editingInlineInput);
+
+                                  onInlineHoraCommit?.(row.id, formattedValue);
+                                  setEditingCell(null);
+                                  setEditingInlineInput("");
+                                  return;
+                                }
+
+                                if (column === "Técn") {
+                                  const normalizedValue =
+                                    normalizePositiveIntegerValue(
+                                      editingInlineInput
+                                    );
+
+                                  onInlineTecnCommit?.(row.id, normalizedValue);
+                                  setEditingCell(null);
+                                  setEditingInlineInput("");
+                                  return;
+                                }
+
+                                if (column === "Conc") {
+                                  const normalizedValue =
+                                    normalizeNonNegativeIntegerValue(
+                                      editingInlineInput
+                                    );
+
+                                  onInlineConcCommit?.(row.id, normalizedValue);
+                                  setEditingCell(null);
+                                  setEditingInlineInput("");
+                                }
+                              }
+
+                              if (event.key === "Escape") {
+                                setEditingCell(null);
+                                setEditingInlineInput("");
+                              }
+                            }}
+                            style={{
+                              width:
+                                column === "Hora"
+                                  ? 60
+                                  : 48,
+                              boxSizing: "border-box",
+                              padding: "4px 6px",
+                            }}
+                          />
+                        ) : (
+                          renderCellContent(
+                            row,
+                            column,
+                            calculatedNetworkBarMap,
+                            calculatedRcBarMap,
+                            calculatedVmaxBarMap,
+                            calculatedBloqueoBarMap,
+                            effectiveVmaxMap,
+                            effectiveBloqueoMap,
+                            {}
+                          )
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}

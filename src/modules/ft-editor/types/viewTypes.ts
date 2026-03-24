@@ -12,7 +12,11 @@ export type EditorDirectField =
   | "vmax"
   | "radio"
   | "rc"
-  | "etcs";
+  | "etcs"
+  | "com"
+  | "hora"
+  | "tecn"
+  | "conc";
   
 export type EditorFtRowView = {
   id: string;

@@ -7,9 +7,15 @@ export type FtSourceTrainMeta = {
   destination: string;
 };
 
+export type FtSourceTrainRowData = {
+  com?: string;
+  hora?: string;
+  tecn?: string;
+};
+
 export type FtSourceTrainData = {
   meta: FtSourceTrainMeta;
-  byRowKey: Record<string, unknown>;
+  byRowKey: Record<string, FtSourceTrainRowData>;
 };
 
 export type FtSourceTrains = Record<string, FtSourceTrainData>;

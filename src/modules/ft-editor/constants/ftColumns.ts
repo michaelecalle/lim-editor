@@ -14,4 +14,14 @@ export const FT_COLUMNS = [
   "ETCS",
 ] as const;
 
+export const HORAIRE_COLUMNS = [
+  "Sit Km",
+  "Dependencia",
+  "Com",
+  "Hora",
+  "Técn",
+  "Conc",
+] as const;
+
 export type FTColumnKey = (typeof FT_COLUMNS)[number];
+export type HoraireColumnKey = (typeof HORAIRE_COLUMNS)[number];
