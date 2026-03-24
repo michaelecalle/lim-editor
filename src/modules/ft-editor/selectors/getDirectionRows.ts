@@ -235,9 +235,11 @@ function buildRowView(
 
   return {
     id:
-      typeof rawRow["id"] === "string" && rawRow["id"].trim() !== ""
-        ? rawRow["id"].trim()
-        : `${sourceTableName}-${sourceIndex}`,
+      typeof rawRow["rowKey"] === "string" && rawRow["rowKey"].trim() !== ""
+        ? rawRow["rowKey"].trim()
+        : typeof rawRow["id"] === "string" && rawRow["id"].trim() !== ""
+          ? rawRow["id"].trim()
+          : `${sourceTableName}-${sourceIndex}`,
     identity: {
       sourceTableName,
       sourceIndex,
