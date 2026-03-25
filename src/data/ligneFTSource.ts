@@ -301,6 +301,56 @@ export function validateNormalizedFtSource(
     });
   }
 
+  if (source.trains != null) {
+    if (!isPlainObject(source.trains)) {
+      diagnostics.push('Structure invalide : "trains" doit être un objet.');
+    } else {
+      for (const [trainNumber, trainData] of Object.entries(source.trains)) {
+        if (!isPlainObject(trainData)) {
+          diagnostics.push(`trains.${trainNumber} invalide : objet attendu.`);
+          continue;
+        }
+
+        const meta = trainData["meta"];
+        const byRowKey = trainData["byRowKey"];
+
+        if (!isPlainObject(meta)) {
+          diagnostics.push(`trains.${trainNumber}.meta invalide : objet attendu.`);
+        } else {
+          if (typeof meta["origine"] !== "string") {
+            diagnostics.push(`trains.${trainNumber}.meta.origine invalide : chaîne attendue.`);
+          }
+
+          if (typeof meta["destination"] !== "string") {
+            diagnostics.push(`trains.${trainNumber}.meta.destination invalide : chaîne attendue.`);
+          }
+        }
+
+        if (!isPlainObject(byRowKey)) {
+          diagnostics.push(`trains.${trainNumber}.byRowKey invalide : objet attendu.`);
+          continue;
+        }
+
+        for (const [rowKey, rowData] of Object.entries(byRowKey)) {
+          if (!isPlainObject(rowData)) {
+            diagnostics.push(`trains.${trainNumber}.byRowKey.${rowKey} invalide : objet attendu.`);
+            continue;
+          }
+
+          for (const fieldName of ["com", "hora", "tecn", "conc"] as const) {
+            const fieldValue = rowData[fieldName];
+
+            if (fieldValue != null && typeof fieldValue !== "string") {
+              diagnostics.push(
+                `trains.${trainNumber}.byRowKey.${rowKey}.${fieldName} invalide : chaîne attendue.`
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
   const hasStructuralError = diagnostics.some(
     (line) =>
       line.includes("invalide") || line.includes("absent ou invalide")

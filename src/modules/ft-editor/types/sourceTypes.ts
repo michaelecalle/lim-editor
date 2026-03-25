@@ -11,6 +11,7 @@ export type FtSourceTrainRowData = {
   com?: string;
   hora?: string;
   tecn?: string;
+  conc?: string;
 };
 
 export type FtSourceTrainData = {

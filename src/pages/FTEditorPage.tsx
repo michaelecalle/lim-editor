@@ -87,6 +87,112 @@ function getDirectionFromTrainNumber(
   return parsed % 2 === 0 ? "NORD_SUD" : "SUD_NORD";
 }
 
+function parseHoraToMinutesForConc(value: string): number | null {
+  const trimmed = value.trim();
+
+  if (!/^\d{1,2}:\d{2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const [hoursText, minutesText] = trimmed.split(":");
+  const hours = Number(hoursText);
+  const minutes = Number(minutesText);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function materializeComputedConcForPublish(
+  source: FtSourceDirectionTables
+): FtSourceDirectionTables {
+  if (!source.trains) {
+    return source;
+  }
+
+  let hasAnyChange = false;
+  const nextTrains: NonNullable<FtSourceDirectionTables["trains"]> = {};
+
+  for (const [trainNumber, trainData] of Object.entries(source.trains)) {
+    const direction = getDirectionFromTrainNumber(trainNumber);
+
+    if (direction == null) {
+      nextTrains[trainNumber] = trainData;
+      continue;
+    }
+
+    const orderedRows = getDirectionRows(source, direction);
+    let previousHoraMinutes: number | null = null;
+    let trainChanged = false;
+    const nextByRowKey: Record<string, FtSourceTrainRowData> = {
+      ...trainData.byRowKey,
+    };
+
+    for (const row of orderedRows) {
+      const existingRowData = trainData.byRowKey[row.id] as
+        | FtSourceTrainRowData
+        | undefined;
+
+      const effectiveHora =
+        existingRowData?.hora != null ? existingRowData.hora : row.visible.hora;
+
+      const currentHoraMinutes = parseHoraToMinutesForConc(effectiveHora ?? "");
+
+      if (existingRowData?.conc != null) {
+        if (currentHoraMinutes != null) {
+          previousHoraMinutes = currentHoraMinutes;
+        }
+        continue;
+      }
+
+      if (currentHoraMinutes != null && previousHoraMinutes != null) {
+        const rawDiff = currentHoraMinutes - previousHoraMinutes;
+        const computedConc = String(rawDiff >= 0 ? rawDiff : rawDiff + 24 * 60);
+        const nextRowData: FtSourceTrainRowData = {
+          ...(existingRowData as FtSourceTrainRowData | undefined),
+          conc: computedConc,
+        };
+
+        nextByRowKey[row.id] = nextRowData;
+        trainChanged = true;
+      }
+
+      if (currentHoraMinutes != null) {
+        previousHoraMinutes = currentHoraMinutes;
+      }
+    }
+
+    nextTrains[trainNumber] = trainChanged
+      ? {
+          ...trainData,
+          byRowKey: nextByRowKey,
+        }
+      : trainData;
+
+    if (trainChanged) {
+      hasAnyChange = true;
+    }
+  }
+
+  if (!hasAnyChange) {
+    return source;
+  }
+
+  return {
+    ...source,
+    trains: nextTrains,
+  };
+}
+
 export default function FTEditorPage() {
   const [activeTab, setActiveTab] = useState<EditorTab>("FT");
   const [direction, setDirection] = useState<EditorDirection>("NORD_SUD");
@@ -334,64 +440,88 @@ export default function FTEditorPage() {
     return horaireRows.slice(startIndex, endIndex + 1);
   }, [horaireRows, validatedOrigin, validatedDestination]);
 
-  const handleValidateHoraireSelection = useCallback(() => {
-    const trimmedOrigin = selectedOrigin.trim();
-    const trimmedDestination = selectedDestination.trim();
+const handleValidateHoraireSelection = useCallback(() => {
+  const trimmedOrigin = selectedOrigin.trim();
+  const trimmedDestination = selectedDestination.trim();
 
-    if (trimmedOrigin === "") {
-      setHoraireValidationError("Choisis une origine.");
-      return;
-    }
+  if (trimmedOrigin === "") {
+    setHoraireValidationError("Choisis une origine.");
+    return;
+  }
 
-    if (trimmedDestination === "") {
-      setHoraireValidationError("Choisis une destination.");
-      return;
-    }
+  if (trimmedDestination === "") {
+    setHoraireValidationError("Choisis une destination.");
+    return;
+  }
 
-    if (trimmedOrigin === trimmedDestination) {
-      setHoraireValidationError(
-        "L’origine et la destination doivent être différentes."
-      );
-      return;
-    }
-
-    const originIndex = horaireRows.findIndex(
-      (row) => row.visible.dependencia.trim() === trimmedOrigin
+  if (trimmedOrigin === trimmedDestination) {
+    setHoraireValidationError(
+      "L’origine et la destination doivent être différentes."
     );
-    const destinationIndex = horaireRows.findIndex(
-      (row) => row.visible.dependencia.trim() === trimmedDestination
+    return;
+  }
+
+  const originIndex = horaireRows.findIndex(
+    (row) => row.visible.dependencia.trim() === trimmedOrigin
+  );
+  const destinationIndex = horaireRows.findIndex(
+    (row) => row.visible.dependencia.trim() === trimmedDestination
+  );
+
+  if (originIndex === -1 || destinationIndex === -1) {
+    setHoraireValidationError(
+      "Origine ou destination introuvable dans le tableau actuel."
     );
+    return;
+  }
 
-    if (originIndex === -1 || destinationIndex === -1) {
-      setHoraireValidationError(
-        "Origine ou destination introuvable dans le tableau actuel."
-      );
-      return;
-    }
+  if (originIndex > destinationIndex) {
+    setHoraireValidationError(
+      "L’ordre origine / destination n’est pas cohérent avec le sens actuellement affiché."
+    );
+    return;
+  }
 
-    if (originIndex > destinationIndex) {
-      setHoraireValidationError(
-        "L’ordre origine / destination n’est pas cohérent avec le sens actuellement affiché."
-      );
-      return;
-    }
+  setValidatedOrigin(trimmedOrigin);
+  setValidatedDestination(trimmedDestination);
+  setHoraireValidationError(null);
 
-    setValidatedOrigin(trimmedOrigin);
-    setValidatedDestination(trimmedDestination);
-    setHoraireValidationError(null);
+  if (selectedTrainNumber.trim() !== "") {
+    setHoraireSelectionsByTrain((previous) => ({
+      ...previous,
+      [selectedTrainNumber]: {
+        selectedOrigin: trimmedOrigin,
+        selectedDestination: trimmedDestination,
+        validatedOrigin: trimmedOrigin,
+        validatedDestination: trimmedDestination,
+      },
+    }));
 
-    if (selectedTrainNumber.trim() !== "") {
-      setHoraireSelectionsByTrain((previous) => ({
+    setParsedSource((previous) => {
+      const previousTrains = previous.trains ?? {};
+      const previousTrain = previousTrains[selectedTrainNumber];
+
+      if (!previousTrain) {
+        return previous;
+      }
+
+      return {
         ...previous,
-        [selectedTrainNumber]: {
-          selectedOrigin: trimmedOrigin,
-          selectedDestination: trimmedDestination,
-          validatedOrigin: trimmedOrigin,
-          validatedDestination: trimmedDestination,
+        trains: {
+          ...previousTrains,
+          [selectedTrainNumber]: {
+            ...previousTrain,
+            meta: {
+              ...previousTrain.meta,
+              origine: trimmedOrigin,
+              destination: trimmedDestination,
+            },
+          },
         },
-      }));
-    }
-  }, [horaireRows, selectedDestination, selectedOrigin, selectedTrainNumber]);
+      };
+    });
+  }
+}, [horaireRows, selectedDestination, selectedOrigin, selectedTrainNumber]);
 
   const hasUnpublishedChanges = useMemo(() => {
     return !areSourceTablesEqual(parsedSource, referenceData);
@@ -428,33 +558,46 @@ export default function FTEditorPage() {
     );
   }, [selectedTrainNumber]);
 
-  useEffect(() => {
-    if (selectedTrainNumber.trim() === "") {
-      setSelectedOrigin("");
-      setSelectedDestination("");
-      setValidatedOrigin("");
-      setValidatedDestination("");
-      setHoraireValidationError(null);
-      return;
-    }
+useEffect(() => {
+  if (selectedTrainNumber.trim() === "") {
+    setSelectedOrigin("");
+    setSelectedDestination("");
+    setValidatedOrigin("");
+    setValidatedDestination("");
+    setHoraireValidationError(null);
+    return;
+  }
 
-    const savedSelection = horaireSelectionsByTrain[selectedTrainNumber];
+  const savedSelection = horaireSelectionsByTrain[selectedTrainNumber];
 
-    if (!savedSelection) {
-      setSelectedOrigin("");
-      setSelectedDestination("");
-      setValidatedOrigin("");
-      setValidatedDestination("");
-      setHoraireValidationError(null);
-      return;
-    }
-
+  if (savedSelection) {
     setSelectedOrigin(savedSelection.selectedOrigin);
     setSelectedDestination(savedSelection.selectedDestination);
     setValidatedOrigin(savedSelection.validatedOrigin);
     setValidatedDestination(savedSelection.validatedDestination);
     setHoraireValidationError(null);
-  }, [horaireSelectionsByTrain, selectedTrainNumber]);
+    return;
+  }
+
+  const trainMeta = parsedSource.trains?.[selectedTrainNumber]?.meta;
+  const metaOrigin = trainMeta?.origine?.trim() ?? "";
+  const metaDestination = trainMeta?.destination?.trim() ?? "";
+
+  if (metaOrigin !== "" && metaDestination !== "") {
+    setSelectedOrigin(metaOrigin);
+    setSelectedDestination(metaDestination);
+    setValidatedOrigin(metaOrigin);
+    setValidatedDestination(metaDestination);
+    setHoraireValidationError(null);
+    return;
+  }
+
+  setSelectedOrigin("");
+  setSelectedDestination("");
+  setValidatedOrigin("");
+  setValidatedDestination("");
+  setHoraireValidationError(null);
+}, [horaireSelectionsByTrain, parsedSource, selectedTrainNumber]);
 
   useEffect(() => {
     if (sourceRows.length === 0) {
@@ -1028,45 +1171,47 @@ export default function FTEditorPage() {
     []
   );
 
-  const handleConfirmPublish = useCallback(async () => {
-    if (isPublishing) {
-      return;
-    }
+const handleConfirmPublish = useCallback(async () => {
+  if (isPublishing) {
+    return;
+  }
 
-    setIsPublishing(true);
+  setIsPublishing(true);
 
-    try {
-      const response = await publishLigneFtData(parsedSource);
+  try {
+    const materializedSource = materializeComputedConcForPublish(parsedSource);
+    const response = await publishLigneFtData(materializedSource);
 
-      setReferenceData(parsedSource);
-      setExportStatus("success");
-      setExportMessage(
-        `Publication réussie : fichier actif mis à jour dans LIM Editor et JSON actif publié aussi vers LIM2, archive créée ${response.diagnostic.archiveCreated.name}.`
-      );
-      setExportDiagnostics([
-        `Fichier TS publié dans LIM Editor : ${response.diagnostic.publishedPath}`,
-        `Fichier JSON publié dans LIM Editor : ${response.diagnostic.publishedJsonPath}`,
-        `Fichier JSON publié dans LIM2 : ${response.diagnostic.publishedLim2JsonPath}`,
-        `Archive créée : ${response.diagnostic.archiveCreated.path}`,
-        response.diagnostic.purgedArchives.length > 0
-          ? `Archives purgées : ${response.diagnostic.purgedArchives.join(", ")}`
-          : "Aucune archive à purger.",
-      ]);
-      setIsPublishDialogOpen(false);
-    } catch (error) {
-      setExportStatus("error");
-      setExportMessage(
-        error instanceof Error
-          ? `Publication échouée : ${error.message}`
-          : "Publication échouée : erreur inconnue."
-      );
-      setExportDiagnostics([
-        "La version en service n’a pas été remplacée par l’éditeur tant que la publication n’a pas abouti.",
-      ]);
-    } finally {
-      setIsPublishing(false);
-    }
-  }, [isPublishing, parsedSource]);
+    setParsedSource(materializedSource);
+    setReferenceData(materializedSource);
+    setExportStatus("success");
+    setExportMessage(
+      `Publication réussie : fichier actif mis à jour dans LIM Editor et JSON actif publié aussi vers LIM2, archive créée ${response.diagnostic.archiveCreated.name}.`
+    );
+    setExportDiagnostics([
+      `Fichier TS publié dans LIM Editor : ${response.diagnostic.publishedPath}`,
+      `Fichier JSON publié dans LIM Editor : ${response.diagnostic.publishedJsonPath}`,
+      `Fichier JSON publié dans LIM2 : ${response.diagnostic.publishedLim2JsonPath}`,
+      `Archive créée : ${response.diagnostic.archiveCreated.path}`,
+      response.diagnostic.purgedArchives.length > 0
+        ? `Archives purgées : ${response.diagnostic.purgedArchives.join(", ")}`
+        : "Aucune archive à purger.",
+    ]);
+    setIsPublishDialogOpen(false);
+  } catch (error) {
+    setExportStatus("error");
+    setExportMessage(
+      error instanceof Error
+        ? `Publication échouée : ${error.message}`
+        : "Publication échouée : erreur inconnue."
+    );
+    setExportDiagnostics([
+      "La version en service n’a pas été remplacée par l’éditeur tant que la publication n’a pas abouti.",
+    ]);
+  } finally {
+    setIsPublishing(false);
+  }
+}, [isPublishing, parsedSource]);
 
   const handleApplyComForSelectedTrain = useCallback(
     (rowId: string, nextCom: string) => {
@@ -1503,41 +1648,52 @@ export default function FTEditorPage() {
 
                 <div style={{ fontWeight: 600 }}>Origine :</div>
 
-                <select
-                  value={selectedOrigin}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setSelectedOrigin(nextValue);
+<select
+  value={selectedOrigin}
+  onChange={(event) => {
+    const nextValue = event.target.value;
+    setSelectedOrigin(nextValue);
 
-                    if (selectedTrainNumber.trim() !== "") {
-                      setHoraireSelectionsByTrain((previous) => ({
-                        ...previous,
-                        [selectedTrainNumber]: {
-                          selectedOrigin: nextValue,
-                          selectedDestination:
-                            previous[selectedTrainNumber]?.selectedDestination ??
-                            selectedDestination,
-                          validatedOrigin:
-                            previous[selectedTrainNumber]?.validatedOrigin ?? "",
-                          validatedDestination:
-                            previous[selectedTrainNumber]?.validatedDestination ?? "",
-                        },
-                      }));
-                    }
-                  }}
-                  disabled={horaireLocationOptions.length === 0}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #d1d5db",
-                    background: "#ffffff",
-                    minWidth: 180,
-                    cursor:
-                      horaireLocationOptions.length === 0
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
+    if (selectedTrainNumber.trim() !== "") {
+      setHoraireSelectionsByTrain((previous) => {
+        const previousSelection = previous[selectedTrainNumber];
+        const trainMeta = parsedSource.trains?.[selectedTrainNumber]?.meta;
+
+        return {
+          ...previous,
+          [selectedTrainNumber]: {
+            selectedOrigin: nextValue,
+            selectedDestination:
+              previousSelection?.selectedDestination ??
+              trainMeta?.destination ??
+              selectedDestination,
+            validatedOrigin:
+              previousSelection?.validatedOrigin ??
+              trainMeta?.origine ??
+              "",
+            validatedDestination:
+              previousSelection?.validatedDestination ??
+              trainMeta?.destination ??
+              "",
+          },
+        };
+      });
+    }
+  }}
+  disabled={horaireLocationOptions.length === 0}
+  style={{
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    background: "#ffffff",
+    minWidth: 180,
+    cursor:
+      horaireLocationOptions.length === 0
+        ? "not-allowed"
+        : "pointer",
+  }}
+>
+
                   <option value="">Choisir</option>
                   {horaireLocationOptions.map((location) => (
                     <option key={`origin-${location}`} value={location}>
@@ -1547,42 +1703,51 @@ export default function FTEditorPage() {
                 </select>
 
                 <div style={{ fontWeight: 600 }}>Destination :</div>
+<select
+  value={selectedDestination}
+  onChange={(event) => {
+    const nextValue = event.target.value;
+    setSelectedDestination(nextValue);
 
-                <select
-                  value={selectedDestination}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setSelectedDestination(nextValue);
+    if (selectedTrainNumber.trim() !== "") {
+      setHoraireSelectionsByTrain((previous) => {
+        const previousSelection = previous[selectedTrainNumber];
+        const trainMeta = parsedSource.trains?.[selectedTrainNumber]?.meta;
 
-                    if (selectedTrainNumber.trim() !== "") {
-                      setHoraireSelectionsByTrain((previous) => ({
-                        ...previous,
-                        [selectedTrainNumber]: {
-                          selectedOrigin:
-                            previous[selectedTrainNumber]?.selectedOrigin ??
-                            selectedOrigin,
-                          selectedDestination: nextValue,
-                          validatedOrigin:
-                            previous[selectedTrainNumber]?.validatedOrigin ?? "",
-                          validatedDestination:
-                            previous[selectedTrainNumber]?.validatedDestination ?? "",
-                        },
-                      }));
-                    }
-                  }}
-                  disabled={horaireLocationOptions.length === 0}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #d1d5db",
-                    background: "#ffffff",
-                    minWidth: 180,
-                    cursor:
-                      horaireLocationOptions.length === 0
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
+        return {
+          ...previous,
+          [selectedTrainNumber]: {
+            selectedOrigin:
+              previousSelection?.selectedOrigin ??
+              trainMeta?.origine ??
+              selectedOrigin,
+            selectedDestination: nextValue,
+            validatedOrigin:
+              previousSelection?.validatedOrigin ??
+              trainMeta?.origine ??
+              "",
+            validatedDestination:
+              previousSelection?.validatedDestination ??
+              trainMeta?.destination ??
+              "",
+          },
+        };
+      });
+    }
+  }}
+  disabled={horaireLocationOptions.length === 0}
+  style={{
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    background: "#ffffff",
+    minWidth: 180,
+    cursor:
+      horaireLocationOptions.length === 0
+        ? "not-allowed"
+        : "pointer",
+  }}
+>
                   <option value="">Choisir</option>
                   {horaireLocationOptions.map((location) => (
                     <option key={`destination-${location}`} value={location}>
