@@ -332,7 +332,13 @@ export default function FTEditorPage() {
     const selectedTrain = parsedSource.trains?.[selectedTrainNumber];
 
     if (!selectedTrain) {
-      return sourceRows;
+      return sourceRows.map((row) => ({
+        ...row,
+        visual: {
+          ...row.visual,
+          concTone: "default" as const,
+        },
+      }));
     }
 
     function parseHoraToMinutes(value: string): number | null {
@@ -375,16 +381,28 @@ export default function FTEditorPage() {
         rowTrainData?.tecn != null ? rowTrainData.tecn : row.visible.tecn;
 
       const currentHoraMinutes = parseHoraToMinutes(nextHora ?? "");
-      let nextConc = "";
+      let computedConc = "";
 
-      if (rowTrainData?.conc != null) {
-        nextConc = rowTrainData.conc;
-      } else if (
+      if (
         currentHoraMinutes != null &&
         previousHoraMinutes != null
       ) {
         const rawDiff = currentHoraMinutes - previousHoraMinutes;
-        nextConc = String(rawDiff >= 0 ? rawDiff : rawDiff + 24 * 60);
+        computedConc = String(rawDiff >= 0 ? rawDiff : rawDiff + 24 * 60);
+      }
+
+      let nextConc = "";
+      let concTone: "default" | "computed" | "manualOverride" = "default";
+
+      if (rowTrainData?.conc != null) {
+        nextConc = rowTrainData.conc;
+
+        if (computedConc !== "" && rowTrainData.conc !== computedConc) {
+          concTone = "manualOverride";
+        }
+      } else if (computedConc !== "") {
+        nextConc = computedConc;
+        concTone = "computed";
       }
 
       if (currentHoraMinutes != null) {
@@ -399,6 +417,10 @@ export default function FTEditorPage() {
           hora: nextHora ?? "",
           tecn: nextTecn ?? "",
           conc: nextConc,
+        },
+        visual: {
+          ...row.visual,
+          concTone,
         },
       };
     });

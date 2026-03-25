@@ -49,6 +49,7 @@ export type EditorFtRowView = {
     vmaxBar: boolean;
     vmaxHighlight: boolean;
     rcBar: boolean;
+    concTone: "default" | "computed" | "manualOverride";
   };
 
   technical: {

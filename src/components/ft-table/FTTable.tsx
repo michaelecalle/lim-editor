@@ -407,6 +407,14 @@ function renderCellContent(
   );
 
   const isCsvVmaxCell = column === "V Max" && row.technical.csv === true;
+  const isConcCell = column === "Conc";
+
+  const concStyle =
+    isConcCell && row.visual.concTone === "computed"
+      ? { color: "#2563eb", fontWeight: 600 }
+      : isConcCell && row.visual.concTone === "manualOverride"
+        ? { color: "#dc2626", fontWeight: 600 }
+        : undefined;
 
   if (hasBar && value) {
     return (
@@ -416,7 +424,7 @@ function renderCellContent(
         }
       >
         <div className="ft-cell-bar" />
-        <span>{value}</span>
+        <span style={concStyle}>{value}</span>
       </div>
     );
   }
@@ -439,11 +447,19 @@ function renderCellContent(
     );
   }
 
-  return isCsvVmaxCell ? (
-    <span className="ft-cell-text--csv-vmax">{value}</span>
-  ) : (
-    value
-  );
+  if (isCsvVmaxCell) {
+    return (
+      <span className="ft-cell-text--csv-vmax" style={concStyle}>
+        {value}
+      </span>
+    );
+  }
+
+  if (concStyle) {
+    return <span style={concStyle}>{value}</span>;
+  }
+
+  return value;
 }
 
 export default function FTTable({
@@ -485,6 +501,90 @@ export default function FTTable({
     column: "Com" | "Hora" | "Técn" | "Conc";
   } | null>(null);
   const [editingInlineInput, setEditingInlineInput] = useState("");
+
+  function getNextInlineValue(
+    row: EditorFtRowView,
+    column: "Com" | "Hora" | "Técn" | "Conc"
+  ): string {
+    if (column === "Hora") {
+      return sanitizeHoraInput(row.visible.hora ?? "");
+    }
+
+    if (column === "Conc") {
+      return sanitizeNonNegativeIntegerInput(row.visible.conc ?? "");
+    }
+
+    if (column === "Com") {
+      return sanitizePositiveIntegerInput(row.visible.com ?? "");
+    }
+
+    return sanitizePositiveIntegerInput(row.visible.tecn ?? "");
+  }
+
+  function commitInlineValue(
+    row: EditorFtRowView,
+    column: "Com" | "Hora" | "Técn" | "Conc",
+    rawInput: string
+  ): void {
+    if (column === "Com") {
+      const normalizedValue = normalizePositiveIntegerValue(rawInput);
+      onInlineComCommit?.(row.id, normalizedValue);
+      return;
+    }
+
+    if (column === "Hora") {
+      const formattedValue = formatHoraDigits(rawInput);
+      onInlineHoraCommit?.(row.id, formattedValue);
+      return;
+    }
+
+    if (column === "Técn") {
+      const normalizedValue = normalizePositiveIntegerValue(rawInput);
+      onInlineTecnCommit?.(row.id, normalizedValue);
+      return;
+    }
+
+    const normalizedValue = normalizeNonNegativeIntegerValue(rawInput);
+    onInlineConcCommit?.(row.id, normalizedValue);
+  }
+
+  function moveToNextInlineCell(
+    currentRowId: string,
+    column: "Com" | "Hora" | "Técn" | "Conc"
+  ): void {
+    const currentRowIndex = rows.findIndex((row) => row.id === currentRowId);
+
+    if (currentRowIndex === -1) {
+      setEditingCell(null);
+      setEditingInlineInput("");
+      return;
+    }
+
+    const nextRow = rows.find((row, index) => {
+      if (index <= currentRowIndex) {
+        return false;
+      }
+
+      if (row.visual.isNoteOnly) {
+        return false;
+      }
+
+      return row.visible.dependencia.trim() !== "";
+    });
+
+    if (!nextRow) {
+      setEditingCell(null);
+      setEditingInlineInput("");
+      return;
+    }
+
+    setEditingCell({
+      rowId: nextRow.id,
+      column,
+    });
+    setEditingInlineInput(getNextInlineValue(nextRow, column));
+    onRowSelect(nextRow);
+  }
 
   return (
     <div className="ft-table-placeholder">
@@ -669,100 +769,19 @@ export default function FTTable({
                               );
                             }}
                             onBlur={() => {
-                              if (column === "Com") {
-                                const normalizedValue =
-                                  normalizePositiveIntegerValue(
-                                    editingInlineInput
-                                  );
-
-                                onInlineComCommit?.(row.id, normalizedValue);
-                                setEditingCell(null);
-                                setEditingInlineInput("");
-                                return;
-                              }
-
-                              if (column === "Hora") {
-                                const formattedValue =
-                                  formatHoraDigits(editingInlineInput);
-
-                                onInlineHoraCommit?.(row.id, formattedValue);
-                                setEditingCell(null);
-                                setEditingInlineInput("");
-                                return;
-                              }
-
-                              if (column === "Técn") {
-                                const normalizedValue =
-                                  normalizePositiveIntegerValue(
-                                    editingInlineInput
-                                  );
-
-                                onInlineTecnCommit?.(row.id, normalizedValue);
-                                setEditingCell(null);
-                                setEditingInlineInput("");
-                                return;
-                              }
-
-                              if (column === "Conc") {
-                                const normalizedValue =
-                                  normalizeNonNegativeIntegerValue(
-                                    editingInlineInput
-                                  );
-
-                                onInlineConcCommit?.(row.id, normalizedValue);
-                                setEditingCell(null);
-                                setEditingInlineInput("");
-                              }
+                              commitInlineValue(row, column, editingInlineInput);
+                              setEditingCell(null);
+                              setEditingInlineInput("");
                             }}
                             onClick={(event) => {
                               event.stopPropagation();
                             }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") {
-                                if (column === "Com") {
-                                  const normalizedValue =
-                                    normalizePositiveIntegerValue(
-                                      editingInlineInput
-                                    );
-
-                                  onInlineComCommit?.(row.id, normalizedValue);
-                                  setEditingCell(null);
-                                  setEditingInlineInput("");
-                                  return;
-                                }
-
-                                if (column === "Hora") {
-                                  const formattedValue =
-                                    formatHoraDigits(editingInlineInput);
-
-                                  onInlineHoraCommit?.(row.id, formattedValue);
-                                  setEditingCell(null);
-                                  setEditingInlineInput("");
-                                  return;
-                                }
-
-                                if (column === "Técn") {
-                                  const normalizedValue =
-                                    normalizePositiveIntegerValue(
-                                      editingInlineInput
-                                    );
-
-                                  onInlineTecnCommit?.(row.id, normalizedValue);
-                                  setEditingCell(null);
-                                  setEditingInlineInput("");
-                                  return;
-                                }
-
-                                if (column === "Conc") {
-                                  const normalizedValue =
-                                    normalizeNonNegativeIntegerValue(
-                                      editingInlineInput
-                                    );
-
-                                  onInlineConcCommit?.(row.id, normalizedValue);
-                                  setEditingCell(null);
-                                  setEditingInlineInput("");
-                                }
+                                event.preventDefault();
+                                commitInlineValue(row, column, editingInlineInput);
+                                moveToNextInlineCell(row.id, column);
+                                return;
                               }
 
                               if (event.key === "Escape") {
