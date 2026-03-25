@@ -3,6 +3,8 @@ import type { LigneFtArchiveItem, LigneFtPublishDiagnostic } from "../../types/l
 import {
   ACTIVE_FILE_PATH,
   ACTIVE_JSON_FILE_PATH,
+  LIM2_ACTIVE_FILE_PATH,
+  LIM2_ACTIVE_JSON_FILE_PATH,
   ARCHIVES_DIR_PATH,
   MAX_ARCHIVES,
 } from "./constants.js";
@@ -222,8 +224,12 @@ export async function publishNormalizedData(
     ACTIVE_JSON_FILE_PATH,
     "editor",
   );
+  const lim2TsFileSha = await loadOptionalGithubFileSha(
+    LIM2_ACTIVE_FILE_PATH,
+    "lim2",
+  );
   const lim2JsonFileSha = await loadOptionalGithubFileSha(
-    ACTIVE_JSON_FILE_PATH,
+    LIM2_ACTIVE_JSON_FILE_PATH,
     "lim2",
   );
 
@@ -248,7 +254,15 @@ export async function publishNormalizedData(
   );
 
   await githubPutFile(
-    ACTIVE_JSON_FILE_PATH,
+    LIM2_ACTIVE_FILE_PATH,
+    nextTsContent,
+    "Publish updated ligneFT.normalized.ts for LIM2",
+    lim2TsFileSha ?? undefined,
+    "lim2",
+  );
+
+  await githubPutFile(
+    LIM2_ACTIVE_JSON_FILE_PATH,
     nextJsonContent,
     "Publish updated ligneFT.normalized.json for LIM2",
     lim2JsonFileSha ?? undefined,
@@ -260,7 +274,7 @@ export async function publishNormalizedData(
   return {
     publishedPath: ACTIVE_FILE_PATH,
     publishedJsonPath: ACTIVE_JSON_FILE_PATH,
-    publishedLim2JsonPath: ACTIVE_JSON_FILE_PATH,
+    publishedLim2JsonPath: LIM2_ACTIVE_JSON_FILE_PATH,
     archiveCreated: {
       name: archiveCreated.name,
       path: archiveCreated.path,
