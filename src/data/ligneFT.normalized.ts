@@ -2237,11 +2237,13 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         },
         "sn-data-0041": {
           "hora": "10:10",
-          "conc": "6"
+          "conc": "6",
+          "com": "3"
         },
         "sn-data-0047": {
           "hora": "10:28",
-          "conc": "18"
+          "conc": "18",
+          "com": "3"
         },
         "sn-data-0048": {
           "hora": "10:33",
