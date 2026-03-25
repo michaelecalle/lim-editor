@@ -182,6 +182,7 @@ function buildEmptyRowView(
       vmaxBar: false,
       vmaxHighlight: false,
       rcBar: false,
+      concTone: "default",
     },
     technical: {
       network: null,
@@ -266,6 +267,7 @@ function buildRowView(
       vmaxBar: false,
       vmaxHighlight: false,
       rcBar: false,
+      concTone: "default",
     },
     technical: {
       network,
