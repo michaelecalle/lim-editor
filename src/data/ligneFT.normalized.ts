@@ -2133,6 +2133,10 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
         "sn-data-0019": {
           "hora": "13:55",
           "conc": "10"
+        },
+        "sn-data-0020": {
+          "hora": "14:00",
+          "conc": "5"
         }
       }
     },
