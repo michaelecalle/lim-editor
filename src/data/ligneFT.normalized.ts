@@ -2117,7 +2117,7 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
       },
       "byRowKey": {
         "sn-data-0006": {
-          "hora": "16:28"
+          "hora": "16:20"
         },
         "sn-data-0012": {
           "hora": "16:30",
