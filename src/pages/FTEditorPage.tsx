@@ -1857,7 +1857,7 @@ const handleApplyHoraForSelectedTrain = useCallback(
     }
 
     setParsedSource((previous) => {
-      const tableNames: Array<keyof FtSourceDirectionTables> = ["nordSud", "sudNord"];
+      const tableNames: Array<"nordSud" | "sudNord"> = ["nordSud", "sudNord"];
 
       for (const tableName of tableNames) {
         const currentTable = previous[tableName];
@@ -1973,7 +1973,7 @@ const handleApplyHoraForSelectedTrain = useCallback(
       }
 
       setParsedSource((previous) => {
-        const tableNames: Array<keyof FtSourceDirectionTables> = ["nordSud", "sudNord"];
+        const tableNames: Array<"nordSud" | "sudNord"> = ["nordSud", "sudNord"];
 
         for (const tableName of tableNames) {
           const currentTable = previous[tableName];
