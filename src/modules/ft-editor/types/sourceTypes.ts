@@ -14,9 +14,12 @@ export type FtSourceTrainRowData = {
   conc?: string;
 };
 
+export type FtSourceTrainPublishState = "published" | "local";
+
 export type FtSourceTrainData = {
   meta: FtSourceTrainMeta;
   byRowKey: Record<string, FtSourceTrainRowData>;
+  publishState?: FtSourceTrainPublishState;
 };
 
 export type FtSourceTrains = Record<string, FtSourceTrainData>;

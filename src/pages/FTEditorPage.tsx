@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArchiveListModal from "../components/ArchiveListModal";
 import EditorStatusBanner from "../components/EditorStatusBanner";
 import PublishConfirmDialog from "../components/PublishConfirmDialog";
@@ -15,6 +15,7 @@ import type {
 } from "../modules/ft-editor/types/viewTypes";
 import type {
   FtSourceDirectionTables,
+  FtSourceTrainData,
   FtSourceTrainRowData,
 } from "../modules/ft-editor/types/sourceTypes";
 import {
@@ -112,6 +113,32 @@ function parseHoraToMinutesForConc(value: string): number | null {
   return hours * 60 + minutes;
 }
 
+function hasLeadingZeros(trainNumber: string): boolean {
+  return /^0\d+$/.test(trainNumber.trim());
+}
+
+function removeLeadingZeros(trainNumber: string): string {
+  const trimmed = trainNumber.trim();
+  const normalized = trimmed.replace(/^0+/, "");
+  return normalized === "" ? "0" : normalized;
+}
+
+function buildEmptyLocalTrainData(): FtSourceTrainData {
+  return {
+    meta: {
+      origine: "",
+      destination: "",
+    },
+    byRowKey: {},
+    publishState: "local",
+  };
+}
+
+function isTrainNumberInputValid(value: string): boolean {
+  const trimmed = value.trim();
+  return /^\d{1,6}$/.test(trimmed);
+}
+
 function materializeComputedConcForPublish(
   source: FtSourceDirectionTables
 ): FtSourceDirectionTables {
@@ -193,6 +220,26 @@ function materializeComputedConcForPublish(
   };
 }
 
+function clearLocalPublishState(
+  source: FtSourceDirectionTables
+): FtSourceDirectionTables {
+  if (!source.trains) {
+    return source;
+  }
+
+  const nextTrains: NonNullable<FtSourceDirectionTables["trains"]> = {};
+
+  for (const [trainNumber, trainData] of Object.entries(source.trains)) {
+    const { publishState: _publishState, ...restTrainData } = trainData;
+    nextTrains[trainNumber] = restTrainData;
+  }
+
+  return {
+    ...source,
+    trains: nextTrains,
+  };
+}
+
 export default function FTEditorPage() {
   const [activeTab, setActiveTab] = useState<EditorTab>("FT");
   const [direction, setDirection] = useState<EditorDirection>("NORD_SUD");
@@ -248,9 +295,121 @@ export default function FTEditorPage() {
   const [restoreErrorMessage, setRestoreErrorMessage] = useState<string | null>(
     null
   );
+  const [isCreateTrainModalOpen, setIsCreateTrainModalOpen] = useState(false);
+  const [createTrainInput, setCreateTrainInput] = useState("");
+  const createTrainInputRef = useRef<HTMLInputElement | null>(null);
+  const [isLeadingZeroConfirmOpen, setIsLeadingZeroConfirmOpen] =
+    useState(false);
+  const [pendingLeadingZeroTrainNumber, setPendingLeadingZeroTrainNumber] =
+    useState("");
+  const [isDuplicateTrainConfirmOpen, setIsDuplicateTrainConfirmOpen] =
+    useState(false);
+  const [pendingDuplicateTrainNumber, setPendingDuplicateTrainNumber] =
+    useState("");
+  const [lastDuplicateVariantDecision, setLastDuplicateVariantDecision] =
+    useState<"yes" | "no" | null>(null);
+  const [isDeleteTrainConfirmOpen, setIsDeleteTrainConfirmOpen] =
+    useState(false);
 
   const directionLabel = getDirectionLabel(direction);
   const sourceTableLabel = getSourceTableLabel(direction);
+
+  useEffect(() => {
+    if (!isCreateTrainModalOpen) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      createTrainInputRef.current?.focus();
+      createTrainInputRef.current?.select();
+    });
+
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      if (isLeadingZeroConfirmOpen || isDuplicateTrainConfirmOpen) {
+        return;
+      }
+
+      setCreateTrainInput("");
+      setPendingLeadingZeroTrainNumber("");
+      setPendingDuplicateTrainNumber("");
+      setIsLeadingZeroConfirmOpen(false);
+      setIsDuplicateTrainConfirmOpen(false);
+      setLastDuplicateVariantDecision(null);
+      setIsCreateTrainModalOpen(false);
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [
+    isCreateTrainModalOpen,
+    isDuplicateTrainConfirmOpen,
+    isLeadingZeroConfirmOpen,
+  ]);
+
+  useEffect(() => {
+    if (!isLeadingZeroConfirmOpen) {
+      return;
+    }
+
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setPendingLeadingZeroTrainNumber("");
+        setIsLeadingZeroConfirmOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [isLeadingZeroConfirmOpen]);
+
+  useEffect(() => {
+    if (!isDuplicateTrainConfirmOpen) {
+      return;
+    }
+
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setLastDuplicateVariantDecision("no");
+        setPendingDuplicateTrainNumber("");
+        setIsDuplicateTrainConfirmOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [isDuplicateTrainConfirmOpen]);
+
+  useEffect(() => {
+    if (!isDeleteTrainConfirmOpen) {
+      return;
+    }
+
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsDeleteTrainConfirmOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [isDeleteTrainConfirmOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -431,6 +590,18 @@ export default function FTEditorPage() {
       a.localeCompare(b, "fr", { numeric: true, sensitivity: "base" })
     );
   }, [parsedSource]);
+
+  const unpublishedTrainNumbers = useMemo(() => {
+    return new Set(
+      Object.entries(parsedSource.trains ?? {})
+        .filter(([, trainData]) => trainData.publishState === "local")
+        .map(([trainNumber]) => trainNumber)
+    );
+  }, [parsedSource.trains]);
+
+  const isSelectedTrainUnpublished =
+    selectedTrainNumber.trim() !== "" &&
+    unpublishedTrainNumbers.has(selectedTrainNumber);
 
   const horaireLocationOptions = useMemo(() => {
     const values = sourceRows
@@ -1202,10 +1373,11 @@ const handleConfirmPublish = useCallback(async () => {
 
   try {
     const materializedSource = materializeComputedConcForPublish(parsedSource);
-    const response = await publishLigneFtData(materializedSource);
+    const publishedSource = clearLocalPublishState(materializedSource);
+    const response = await publishLigneFtData(publishedSource);
 
-    setParsedSource(materializedSource);
-    setReferenceData(materializedSource);
+    setParsedSource(publishedSource);
+    setReferenceData(publishedSource);
     setExportStatus("success");
     setExportMessage(
       `Publication réussie : fichier actif mis à jour dans LIM Editor et JSON actif publié aussi vers LIM2, archive créée ${response.diagnostic.archiveCreated.name}.`
@@ -1235,61 +1407,217 @@ const handleConfirmPublish = useCallback(async () => {
   }
 }, [isPublishing, parsedSource]);
 
-  const handleApplyComForSelectedTrain = useCallback(
-    (rowId: string, nextCom: string) => {
-      if (selectedTrainNumber.trim() === "") {
-        return;
+const handleCreateTrain = useCallback(() => {
+  setCreateTrainInput("");
+  setPendingLeadingZeroTrainNumber("");
+  setPendingDuplicateTrainNumber("");
+  setIsLeadingZeroConfirmOpen(false);
+  setIsDuplicateTrainConfirmOpen(false);
+  setLastDuplicateVariantDecision(null);
+  setIsCreateTrainModalOpen(true);
+}, []);
+
+const handleCancelCreateTrain = useCallback(() => {
+  setCreateTrainInput("");
+  setPendingLeadingZeroTrainNumber("");
+  setPendingDuplicateTrainNumber("");
+  setIsLeadingZeroConfirmOpen(false);
+  setIsDuplicateTrainConfirmOpen(false);
+  setLastDuplicateVariantDecision(null);
+  setIsCreateTrainModalOpen(false);
+}, []);
+
+const finalizeCreateTrain = useCallback(
+  (nextTrainNumber: string) => {
+    const existingTrain = parsedSource.trains?.[nextTrainNumber];
+
+    if (existingTrain != null) {
+      setPendingDuplicateTrainNumber(nextTrainNumber);
+      setIsDuplicateTrainConfirmOpen(true);
+      return;
+    }
+
+    setParsedSource((previous) => {
+      const previousTrains = previous.trains ?? {};
+
+      return {
+        ...previous,
+        trains: {
+          ...previousTrains,
+          [nextTrainNumber]: buildEmptyLocalTrainData(),
+        },
+      };
+    });
+
+    setSelectedTrainNumber(nextTrainNumber);
+    setCreateTrainInput("");
+    setPendingLeadingZeroTrainNumber("");
+    setPendingDuplicateTrainNumber("");
+    setIsLeadingZeroConfirmOpen(false);
+    setIsDuplicateTrainConfirmOpen(false);
+    setLastDuplicateVariantDecision(null);
+    setIsCreateTrainModalOpen(false);
+  },
+  [parsedSource.trains]
+);
+
+const handleConfirmCreateTrain = useCallback(() => {
+  const nextTrainNumber = createTrainInput.trim();
+
+  if (!isTrainNumberInputValid(nextTrainNumber)) {
+    return;
+  }
+
+  if (hasLeadingZeros(nextTrainNumber)) {
+    setPendingLeadingZeroTrainNumber(nextTrainNumber);
+    setIsLeadingZeroConfirmOpen(true);
+    return;
+  }
+
+  finalizeCreateTrain(nextTrainNumber);
+}, [createTrainInput, finalizeCreateTrain]);
+
+const handleKeepLeadingZeroTrainNumber = useCallback(() => {
+  const nextTrainNumber = pendingLeadingZeroTrainNumber.trim();
+
+  if (!isTrainNumberInputValid(nextTrainNumber)) {
+    return;
+  }
+
+  finalizeCreateTrain(nextTrainNumber);
+}, [finalizeCreateTrain, pendingLeadingZeroTrainNumber]);
+
+const handleRemoveLeadingZerosFromTrainNumber = useCallback(() => {
+  const nextTrainNumber = removeLeadingZeros(pendingLeadingZeroTrainNumber);
+
+  if (!isTrainNumberInputValid(nextTrainNumber)) {
+    return;
+  }
+
+  finalizeCreateTrain(nextTrainNumber);
+}, [finalizeCreateTrain, pendingLeadingZeroTrainNumber]);
+
+const handleCancelLeadingZeroConfirm = useCallback(() => {
+  setPendingLeadingZeroTrainNumber("");
+  setIsLeadingZeroConfirmOpen(false);
+}, []);
+
+const handleDuplicateVariantYes = useCallback(() => {
+  setLastDuplicateVariantDecision("yes");
+  setPendingDuplicateTrainNumber("");
+  setIsDuplicateTrainConfirmOpen(false);
+}, []);
+
+const handleDuplicateVariantNo = useCallback(() => {
+  setLastDuplicateVariantDecision("no");
+  setPendingDuplicateTrainNumber("");
+  setIsDuplicateTrainConfirmOpen(false);
+}, []);
+
+const handleOpenDeleteTrainConfirm = useCallback(() => {
+  if (selectedTrainNumber.trim() === "") {
+    return;
+  }
+
+  setIsDeleteTrainConfirmOpen(true);
+}, [selectedTrainNumber]);
+
+const handleCancelDeleteTrain = useCallback(() => {
+  setIsDeleteTrainConfirmOpen(false);
+}, []);
+
+const handleConfirmDeleteTrain = useCallback(() => {
+  const trainNumberToDelete = selectedTrainNumber.trim();
+
+  if (trainNumberToDelete === "") {
+    setIsDeleteTrainConfirmOpen(false);
+    return;
+  }
+
+  setParsedSource((previous) => {
+    const previousTrains = previous.trains ?? {};
+
+    if (!(trainNumberToDelete in previousTrains)) {
+      return previous;
+    }
+
+    const nextTrains = { ...previousTrains };
+    delete nextTrains[trainNumberToDelete];
+
+    return {
+      ...previous,
+      trains: nextTrains,
+    };
+  });
+
+  setHoraireSelectionsByTrain((previous) => {
+    if (!(trainNumberToDelete in previous)) {
+      return previous;
+    }
+
+    const nextSelections = { ...previous };
+    delete nextSelections[trainNumberToDelete];
+    return nextSelections;
+  });
+
+  setIsDeleteTrainConfirmOpen(false);
+}, [selectedTrainNumber]);
+
+const handleApplyComForSelectedTrain = useCallback(
+  (rowId: string, nextCom: string) => {
+    if (selectedTrainNumber.trim() === "") {
+      return;
+    }
+
+    const trimmedCom = nextCom.trim();
+    const normalizedCom =
+      trimmedCom !== "" && /^[1-9]\d*$/.test(trimmedCom) ? trimmedCom : "";
+
+    setParsedSource((previous) => {
+      const previousTrains = previous.trains ?? {};
+      const previousTrain = previousTrains[selectedTrainNumber];
+
+      if (!previousTrain) {
+        return previous;
       }
 
-      const trimmedCom = nextCom.trim();
-      const normalizedCom =
-        trimmedCom !== "" && /^[1-9]\d*$/.test(trimmedCom) ? trimmedCom : "";
+      const previousRowData = previousTrain.byRowKey[rowId] ?? {};
+      const nextRowData: FtSourceTrainRowData = {
+        ...(previousRowData as FtSourceTrainRowData),
+      };
 
-      setParsedSource((previous) => {
-        const previousTrains = previous.trains ?? {};
-        const previousTrain = previousTrains[selectedTrainNumber];
+      if (normalizedCom === "") {
+        delete nextRowData.com;
+      } else {
+        nextRowData.com = normalizedCom;
+      }
 
-        if (!previousTrain) {
-          return previous;
-        }
+      const nextByRowKey = {
+        ...previousTrain.byRowKey,
+      };
 
-        const previousRowData = previousTrain.byRowKey[rowId] ?? {};
-        const nextRowData: FtSourceTrainRowData = {
-          ...(previousRowData as FtSourceTrainRowData),
-        };
+      if (Object.keys(nextRowData).length === 0) {
+        delete nextByRowKey[rowId];
+      } else {
+        nextByRowKey[rowId] = nextRowData;
+      }
 
-        if (normalizedCom === "") {
-          delete nextRowData.com;
-        } else {
-          nextRowData.com = normalizedCom;
-        }
-
-        const nextByRowKey = {
-          ...previousTrain.byRowKey,
-        };
-
-        if (Object.keys(nextRowData).length === 0) {
-          delete nextByRowKey[rowId];
-        } else {
-          nextByRowKey[rowId] = nextRowData;
-        }
-
-        return {
-          ...previous,
-          trains: {
-            ...previousTrains,
-            [selectedTrainNumber]: {
-              ...previousTrain,
-              byRowKey: nextByRowKey,
-            },
+      return {
+        ...previous,
+        trains: {
+          ...previousTrains,
+          [selectedTrainNumber]: {
+            ...previousTrain,
+            byRowKey: nextByRowKey,
           },
-        };
-      });
-    },
-    [selectedTrainNumber]
-  );
+        },
+      };
+    });
+  },
+  [selectedTrainNumber]
+);
 
-  const handleApplyHoraForSelectedTrain = useCallback(
+const handleApplyHoraForSelectedTrain = useCallback(
     (rowId: string, nextHora: string) => {
       if (selectedTrainNumber.trim() === "") {
         return;
@@ -1451,6 +1779,321 @@ const handleConfirmPublish = useCallback(async () => {
     [selectedTrainNumber]
   );
 
+    const handleDeleteRows = useCallback((rowIds: string[]) => {
+    if (rowIds.length === 0) {
+      return;
+    }
+
+    const rowIdSet = new Set(rowIds);
+
+    setParsedSource((previous) => {
+      const nextNordSudRows = previous.nordSud.rows.filter((rawRow) => {
+        if (!isRecord(rawRow)) {
+          return true;
+        }
+
+        const rawId = typeof rawRow["id"] === "string" ? rawRow["id"] : "";
+        return !rowIdSet.has(rawId);
+      });
+
+      const nextSudNordRows = previous.sudNord.rows.filter((rawRow) => {
+        if (!isRecord(rawRow)) {
+          return true;
+        }
+
+        const rawId = typeof rawRow["id"] === "string" ? rawRow["id"] : "";
+        return !rowIdSet.has(rawId);
+      });
+
+      return {
+        ...previous,
+        nordSud: {
+          rows: nextNordSudRows,
+        },
+        sudNord: {
+          rows: nextSudNordRows,
+        },
+      };
+    });
+
+    setSelectedRowId((previousSelectedRowId) => {
+      if (previousSelectedRowId == null) {
+        return previousSelectedRowId;
+      }
+
+      return rowIdSet.has(previousSelectedRowId)
+        ? null
+        : previousSelectedRowId;
+    });
+  }, []);
+    const handleInsertRowAbove = useCallback((targetRowId: string) => {
+    function extractRowNumberFromId(rowId: string): number {
+      const match = rowId.match(/-(\d+)$/);
+      return match ? Number(match[1]) : 0;
+    }
+
+    function buildNextDataId(
+      rows: FtSourceDirectionTables["nordSud"]["rows"],
+      prefix: string
+    ): string {
+      let maxNumber = 0;
+
+      for (const rawRow of rows) {
+        if (!isRecord(rawRow)) {
+          continue;
+        }
+
+        const rawId = typeof rawRow["id"] === "string" ? rawRow["id"] : "";
+
+        if (!rawId.startsWith(`${prefix}-`)) {
+          continue;
+        }
+
+        maxNumber = Math.max(maxNumber, extractRowNumberFromId(rawId));
+      }
+
+      const nextNumber = String(maxNumber + 1).padStart(4, "0");
+      return `${prefix}-data-${nextNumber}`;
+    }
+
+    setParsedSource((previous) => {
+      const tableNames: Array<keyof FtSourceDirectionTables> = ["nordSud", "sudNord"];
+
+      for (const tableName of tableNames) {
+        const currentTable = previous[tableName];
+        const targetIndex = currentTable.rows.findIndex((rawRow) => {
+          if (!isRecord(rawRow)) {
+            return false;
+          }
+
+          return rawRow["id"] === targetRowId;
+        });
+
+        if (targetIndex === -1) {
+          continue;
+        }
+
+        const targetRawRow = currentTable.rows[targetIndex];
+
+        if (!isRecord(targetRawRow)) {
+          return previous;
+        }
+
+        const targetType =
+          typeof targetRawRow["type"] === "string" ? targetRawRow["type"] : "data";
+
+        let insertionIndex = targetIndex;
+
+        if (targetType === "data" && targetIndex > 0) {
+          const previousRawRow = currentTable.rows[targetIndex - 1];
+
+          if (
+            isRecord(previousRawRow) &&
+            previousRawRow["type"] === "note"
+          ) {
+            insertionIndex = targetIndex - 1;
+          }
+        }
+
+        const targetId =
+          typeof targetRawRow["id"] === "string" ? targetRawRow["id"] : "";
+        const prefix = targetId.startsWith("sn-") ? "sn" : "ns";
+        const nextDataId = buildNextDataId(currentTable.rows, prefix);
+
+        const newDataRow = {
+          id: nextDataId,
+          rowKey: nextDataId,
+          type: "data",
+          reseau: "",
+          pkInterne: "",
+          pkAdif: "",
+          pkLfp: "",
+          pkRfn: "",
+          bloqueo: "",
+          vmax: "",
+          sitKm: "",
+          dependencia: "",
+          radio: "",
+          rampCaract: "",
+          csv: false,
+          notes: [],
+          etcs: "",
+        };
+
+        const nextRows = [
+          ...currentTable.rows.slice(0, insertionIndex),
+          newDataRow,
+          ...currentTable.rows.slice(insertionIndex),
+        ];
+
+        return {
+          ...previous,
+          [tableName]: {
+            rows: nextRows,
+          },
+        };
+      }
+
+      return previous;
+    });
+  }, []);
+  const handleUpsertNote = useCallback(
+    (targetRowId: string, noteLines: string[]) => {
+      if (noteLines.length === 0) {
+        return;
+      }
+
+      function extractRowNumberFromId(rowId: string): number {
+        const match = rowId.match(/-(\d+)$/);
+        return match ? Number(match[1]) : 0;
+      }
+
+      function buildNextNoteId(
+        rows: FtSourceDirectionTables["nordSud"]["rows"],
+        prefix: string
+      ): string {
+        let maxNumber = 0;
+
+        for (const rawRow of rows) {
+          if (!isRecord(rawRow)) {
+            continue;
+          }
+
+          const rawId = typeof rawRow["id"] === "string" ? rawRow["id"] : "";
+
+          if (!rawId.startsWith(`${prefix}-`)) {
+            continue;
+          }
+
+          maxNumber = Math.max(maxNumber, extractRowNumberFromId(rawId));
+        }
+
+        const nextNumber = String(maxNumber + 1).padStart(4, "0");
+        return `${prefix}-note-${nextNumber}`;
+      }
+
+      setParsedSource((previous) => {
+        const tableNames: Array<keyof FtSourceDirectionTables> = ["nordSud", "sudNord"];
+
+        for (const tableName of tableNames) {
+          const currentTable = previous[tableName];
+          const targetIndex = currentTable.rows.findIndex((rawRow) => {
+            if (!isRecord(rawRow)) {
+              return false;
+            }
+
+            return rawRow["id"] === targetRowId;
+          });
+
+          if (targetIndex === -1) {
+            continue;
+          }
+
+          const targetRawRow = currentTable.rows[targetIndex];
+
+          if (!isRecord(targetRawRow)) {
+            return previous;
+          }
+
+          const targetType =
+            typeof targetRawRow["type"] === "string" ? targetRawRow["type"] : "data";
+
+          if (targetType === "note") {
+            const nextRows = currentTable.rows.map((rawRow, index) => {
+              if (index !== targetIndex || !isRecord(rawRow)) {
+                return rawRow;
+              }
+
+              return {
+                ...rawRow,
+                notes: noteLines,
+              };
+            });
+
+            return {
+              ...previous,
+              [tableName]: {
+                rows: nextRows,
+              },
+            };
+          }
+
+          const previousRawRow =
+            targetIndex > 0 ? currentTable.rows[targetIndex - 1] : null;
+
+          if (
+            previousRawRow != null &&
+            isRecord(previousRawRow) &&
+            previousRawRow["type"] === "note"
+          ) {
+            const nextRows = currentTable.rows.map((rawRow, index) => {
+              if (index !== targetIndex - 1 || !isRecord(rawRow)) {
+                return rawRow;
+              }
+
+              return {
+                ...rawRow,
+                notes: noteLines,
+              };
+            });
+
+            return {
+              ...previous,
+              [tableName]: {
+                rows: nextRows,
+              },
+            };
+          }
+
+          const targetId =
+            typeof targetRawRow["id"] === "string" ? targetRawRow["id"] : "";
+          const prefix = targetId.startsWith("sn-") ? "sn" : "ns";
+          const nextNoteId = buildNextNoteId(currentTable.rows, prefix);
+
+          const newNoteRow = {
+            id: nextNoteId,
+            rowKey: nextNoteId,
+            type: "note",
+            reseau: "",
+            pkInterne: "",
+            pkAdif: "",
+            pkLfp: "",
+            pkRfn: "",
+            bloqueo:
+              typeof targetRawRow["bloqueo"] === "string" ? targetRawRow["bloqueo"] : "",
+            vmax: "",
+            sitKm: "",
+            dependencia: "",
+            radio:
+              typeof targetRawRow["radio"] === "string" ? targetRawRow["radio"] : "",
+            rampCaract:
+              typeof targetRawRow["rampCaract"] === "string"
+                ? targetRawRow["rampCaract"]
+                : "",
+            csv: false,
+            notes: noteLines,
+            etcs: typeof targetRawRow["etcs"] === "string" ? targetRawRow["etcs"] : "",
+          };
+
+          const nextRows = [
+            ...currentTable.rows.slice(0, targetIndex),
+            newNoteRow,
+            ...currentTable.rows.slice(targetIndex),
+          ];
+
+          return {
+            ...previous,
+            [tableName]: {
+              rows: nextRows,
+            },
+          };
+        }
+
+        return previous;
+      });
+    },
+    []
+  );
   const handleDownloadNormalizedFile = useCallback(() => {
     const validation = validateNormalizedFtSource(parsedSource);
 
@@ -1505,6 +2148,455 @@ const handleConfirmPublish = useCallback(async () => {
         onClose={handleCloseRestoreModal}
         onSelectArchive={handleSelectArchive}
       />
+
+      {isCreateTrainModalOpen ? (
+        <div
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCancelCreateTrain();
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: 24,
+          }}
+        >
+          <div
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: "#ffffff",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 700,
+                marginBottom: 16,
+                color: "#111827",
+              }}
+            >
+              Créer un train
+            </div>
+
+            <div
+              style={{
+                fontWeight: 600,
+                marginBottom: 8,
+                color: "#111827",
+              }}
+            >
+              Numéro de train
+            </div>
+
+            <input
+              ref={createTrainInputRef}
+              type="text"
+              value={createTrainInput}
+              onChange={(event) => setCreateTrainInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && isTrainNumberInputValid(createTrainInput)) {
+                  event.preventDefault();
+                  handleConfirmCreateTrain();
+                }
+              }}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: isTrainNumberInputValid(createTrainInput)
+                  ? "1px solid #d1d5db"
+                  : createTrainInput.trim() === ""
+                    ? "1px solid #d1d5db"
+                    : "1px solid #dc2626",
+                background: "#ffffff",
+                marginBottom: 8,
+              }}
+            />
+
+            {createTrainInput.trim() !== "" && !isTrainNumberInputValid(createTrainInput) ? (
+              <div
+                style={{
+                  marginBottom: 16,
+                  color: "#991b1b",
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                Le numéro doit contenir uniquement des chiffres, avec une longueur de 1 à 6.
+              </div>
+            ) : (
+              <div style={{ marginBottom: 16 }} />
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 12,
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleCancelCreateTrain}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#111827",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Annuler
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmCreateTrain}
+                disabled={!isTrainNumberInputValid(createTrainInput)}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #2563eb",
+                  background: isTrainNumberInputValid(createTrainInput)
+                    ? "#2563eb"
+                    : "#93c5fd",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  cursor: isTrainNumberInputValid(createTrainInput)
+                    ? "pointer"
+                    : "not-allowed",
+                }}
+              >
+                Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isLeadingZeroConfirmOpen ? (
+        <div
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCancelLeadingZeroConfirm();
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1200,
+            padding: 24,
+          }}
+        >
+          <div
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              background: "#ffffff",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                marginBottom: 16,
+                color: "#111827",
+              }}
+            >
+              Confirmation du numéro
+            </div>
+
+            <div
+              style={{
+                color: "#111827",
+                lineHeight: 1.5,
+                marginBottom: 20,
+              }}
+            >
+              Vous avez saisi <strong>{pendingLeadingZeroTrainNumber}</strong>.
+              <br />
+              Souhaitez-vous conserver ce numéro ou le convertir en{" "}
+              <strong>{removeLeadingZeros(pendingLeadingZeroTrainNumber)}</strong> ?
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleCancelLeadingZeroConfirm}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#111827",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Retour
+              </button>
+
+              <button
+                type="button"
+                onClick={handleKeepLeadingZeroTrainNumber}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #2563eb",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Conserver
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRemoveLeadingZerosFromTrainNumber}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #1d4ed8",
+                  background: "#1d4ed8",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Supprimer les zéros
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isDuplicateTrainConfirmOpen ? (
+        <div
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleDuplicateVariantNo();
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1300,
+            padding: 24,
+          }}
+        >
+          <div
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              background: "#ffffff",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                marginBottom: 16,
+                color: "#111827",
+              }}
+            >
+              Train déjà existant
+            </div>
+
+            <div
+              style={{
+                color: "#111827",
+                lineHeight: 1.5,
+                marginBottom: 20,
+              }}
+            >
+              Ce train existe déjà. Voulez-vous créer une variante ?
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleDuplicateVariantNo}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#111827",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Non
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDuplicateVariantYes}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #2563eb",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Oui
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isDeleteTrainConfirmOpen ? (
+        <div
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCancelDeleteTrain();
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1400,
+            padding: 24,
+          }}
+        >
+          <div
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              background: "#ffffff",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                marginBottom: 16,
+                color: "#111827",
+              }}
+            >
+              Supprimer un train
+            </div>
+
+            <div
+              style={{
+                color: "#111827",
+                lineHeight: 1.5,
+                marginBottom: 20,
+              }}
+            >
+              Voulez-vous supprimer le train{" "}
+              <strong>{selectedTrainNumber || "?"}</strong> ?
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleCancelDeleteTrain}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#111827",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Annuler
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTrain}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #dc2626",
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <EditorShell
       toolbar={
@@ -1603,6 +2695,9 @@ const handleConfirmPublish = useCallback(async () => {
                   setSelectedRowId(row.id);
                   setRequestedEditorField(field);
                 }}
+                onDeleteRows={handleDeleteRows}
+                onUpsertNote={handleUpsertNote}
+                onInsertRowAbove={handleInsertRowAbove}
               />
 
               <EditorStatusBanner
@@ -1648,8 +2743,12 @@ const handleConfirmPublish = useCallback(async () => {
                   style={{
                     padding: "10px 12px",
                     borderRadius: 10,
-                    border: "1px solid #d1d5db",
+                    border: isSelectedTrainUnpublished
+                      ? "1px solid #2563eb"
+                      : "1px solid #d1d5db",
                     background: "#ffffff",
+                    color: isSelectedTrainUnpublished ? "#2563eb" : "#111827",
+                    fontWeight: isSelectedTrainUnpublished ? 700 : 500,
                     minWidth: 120,
                     cursor:
                       availableTrainNumbers.length === 0
@@ -1660,62 +2759,73 @@ const handleConfirmPublish = useCallback(async () => {
                   {availableTrainNumbers.length === 0 ? (
                     <option value="">Aucun train</option>
                   ) : (
-                    availableTrainNumbers.map((trainNumber) => (
-                      <option key={trainNumber} value={trainNumber}>
-                        {trainNumber}
-                      </option>
-                    ))
+                    availableTrainNumbers.map((trainNumber) => {
+                      const isUnpublished = unpublishedTrainNumbers.has(trainNumber);
+
+                      return (
+                        <option
+                          key={trainNumber}
+                          value={trainNumber}
+                          style={{
+                            color: isUnpublished ? "#2563eb" : "#111827",
+                            fontWeight: isUnpublished ? 700 : 400,
+                          }}
+                        >
+                          {trainNumber}
+                        </option>
+                      );
+                    })
                   )}
                 </select>
 
                 <div style={{ fontWeight: 600 }}>Origine :</div>
 
-<select
-  value={selectedOrigin}
-  onChange={(event) => {
-    const nextValue = event.target.value;
-    setSelectedOrigin(nextValue);
+                <select
+                  value={selectedOrigin}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setSelectedOrigin(nextValue);
 
-    if (selectedTrainNumber.trim() !== "") {
-      setHoraireSelectionsByTrain((previous) => {
-        const previousSelection = previous[selectedTrainNumber];
-        const trainMeta = parsedSource.trains?.[selectedTrainNumber]?.meta;
+                    if (selectedTrainNumber.trim() !== "") {
+                      setHoraireSelectionsByTrain((previous) => {
+                        const previousSelection = previous[selectedTrainNumber];
+                        const trainMeta =
+                          parsedSource.trains?.[selectedTrainNumber]?.meta;
 
-        return {
-          ...previous,
-          [selectedTrainNumber]: {
-            selectedOrigin: nextValue,
-            selectedDestination:
-              previousSelection?.selectedDestination ??
-              trainMeta?.destination ??
-              selectedDestination,
-            validatedOrigin:
-              previousSelection?.validatedOrigin ??
-              trainMeta?.origine ??
-              "",
-            validatedDestination:
-              previousSelection?.validatedDestination ??
-              trainMeta?.destination ??
-              "",
-          },
-        };
-      });
-    }
-  }}
-  disabled={horaireLocationOptions.length === 0}
-  style={{
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #d1d5db",
-    background: "#ffffff",
-    minWidth: 180,
-    cursor:
-      horaireLocationOptions.length === 0
-        ? "not-allowed"
-        : "pointer",
-  }}
->
-
+                        return {
+                          ...previous,
+                          [selectedTrainNumber]: {
+                            selectedOrigin: nextValue,
+                            selectedDestination:
+                              previousSelection?.selectedDestination ??
+                              trainMeta?.destination ??
+                              selectedDestination,
+                            validatedOrigin:
+                              previousSelection?.validatedOrigin ??
+                              trainMeta?.origine ??
+                              "",
+                            validatedDestination:
+                              previousSelection?.validatedDestination ??
+                              trainMeta?.destination ??
+                              "",
+                          },
+                        };
+                      });
+                    }
+                  }}
+                  disabled={horaireLocationOptions.length === 0}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    minWidth: 180,
+                    cursor:
+                      horaireLocationOptions.length === 0
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
                   <option value="">Choisir</option>
                   {horaireLocationOptions.map((location) => (
                     <option key={`origin-${location}`} value={location}>
@@ -1725,51 +2835,53 @@ const handleConfirmPublish = useCallback(async () => {
                 </select>
 
                 <div style={{ fontWeight: 600 }}>Destination :</div>
-<select
-  value={selectedDestination}
-  onChange={(event) => {
-    const nextValue = event.target.value;
-    setSelectedDestination(nextValue);
 
-    if (selectedTrainNumber.trim() !== "") {
-      setHoraireSelectionsByTrain((previous) => {
-        const previousSelection = previous[selectedTrainNumber];
-        const trainMeta = parsedSource.trains?.[selectedTrainNumber]?.meta;
+                <select
+                  value={selectedDestination}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setSelectedDestination(nextValue);
 
-        return {
-          ...previous,
-          [selectedTrainNumber]: {
-            selectedOrigin:
-              previousSelection?.selectedOrigin ??
-              trainMeta?.origine ??
-              selectedOrigin,
-            selectedDestination: nextValue,
-            validatedOrigin:
-              previousSelection?.validatedOrigin ??
-              trainMeta?.origine ??
-              "",
-            validatedDestination:
-              previousSelection?.validatedDestination ??
-              trainMeta?.destination ??
-              "",
-          },
-        };
-      });
-    }
-  }}
-  disabled={horaireLocationOptions.length === 0}
-  style={{
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #d1d5db",
-    background: "#ffffff",
-    minWidth: 180,
-    cursor:
-      horaireLocationOptions.length === 0
-        ? "not-allowed"
-        : "pointer",
-  }}
->
+                    if (selectedTrainNumber.trim() !== "") {
+                      setHoraireSelectionsByTrain((previous) => {
+                        const previousSelection = previous[selectedTrainNumber];
+                        const trainMeta =
+                          parsedSource.trains?.[selectedTrainNumber]?.meta;
+
+                        return {
+                          ...previous,
+                          [selectedTrainNumber]: {
+                            selectedOrigin:
+                              previousSelection?.selectedOrigin ??
+                              trainMeta?.origine ??
+                              selectedOrigin,
+                            selectedDestination: nextValue,
+                            validatedOrigin:
+                              previousSelection?.validatedOrigin ??
+                              trainMeta?.origine ??
+                              "",
+                            validatedDestination:
+                              previousSelection?.validatedDestination ??
+                              trainMeta?.destination ??
+                              "",
+                          },
+                        };
+                      });
+                    }
+                  }}
+                  disabled={horaireLocationOptions.length === 0}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    minWidth: 180,
+                    cursor:
+                      horaireLocationOptions.length === 0
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
                   <option value="">Choisir</option>
                   {horaireLocationOptions.map((location) => (
                     <option key={`destination-${location}`} value={location}>
@@ -1793,6 +2905,53 @@ const handleConfirmPublish = useCallback(async () => {
                 >
                   Valider
                 </button>
+
+                <div
+                  style={{
+                    width: 1,
+                    height: 28,
+                    background: "#d1d5db",
+                    marginLeft: 4,
+                    marginRight: 4,
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={handleCreateTrain}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: "1px solid #2563eb",
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Créer
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenDeleteTrainConfirm}
+                  disabled={selectedTrainNumber.trim() === ""}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: "1px solid #dc2626",
+                    background:
+                      selectedTrainNumber.trim() === "" ? "#fca5a5" : "#dc2626",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    cursor:
+                      selectedTrainNumber.trim() === ""
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  Supprimer
+                </button>
               </div>
 
               {horaireValidationError ? (
@@ -1811,35 +2970,67 @@ const handleConfirmPublish = useCallback(async () => {
                 </div>
               ) : null}
 
-              <FTTable
-                title="Tableau horaire"
-                directionLabel={directionLabel}
-                sourceStatus={sourceStatus}
-                remoteInfo={remoteInfo}
-                inspectionLines={inspectionLines}
-                sourceArrayName={sourceTableLabel}
-                rowCount={displayedHoraireRows.length}
-                firstRowPreview={getRowPreview(displayedHoraireRows[0])}
-                lastRowPreview={getRowPreview(
-                  displayedHoraireRows[displayedHoraireRows.length - 1]
-                )}
-                rows={displayedHoraireRows}
-                columns={HORAIRE_COLUMNS}
-                dimHoraireColumns={false}
-                selectedRowId={selectedRowId}
-                onRowSelect={(row) => {
-                  setSelectedRowId(row.id);
-                  setRequestedEditorField(null);
+              <div
+                style={{
+                  border: isSelectedTrainUnpublished
+                    ? "2px solid #93c5fd"
+                    : "2px solid transparent",
+                  borderRadius: 16,
+                  padding: isSelectedTrainUnpublished ? 8 : 0,
+                  background: "#ffffff",
+                  transition: "border-color 0.15s ease",
                 }}
-                onCellEditRequest={(row, field) => {
-                  setSelectedRowId(row.id);
-                  setRequestedEditorField(field);
-                }}
-                onInlineComCommit={handleApplyComForSelectedTrain}
-                onInlineHoraCommit={handleApplyHoraForSelectedTrain}
-                onInlineTecnCommit={handleApplyTecnForSelectedTrain}
-                onInlineConcCommit={handleApplyConcForSelectedTrain}
-              />
+              >
+                <FTTable
+                  title="Tableau horaire"
+                  titleBadge={
+                    isSelectedTrainUnpublished ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          padding: "4px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #93c5fd",
+                          background: "#dbeafe",
+                          color: "#1d4ed8",
+                          fontWeight: 700,
+                          fontSize: 14,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        En cours d’édition
+                      </span>
+                    ) : null
+                  }
+                  directionLabel={directionLabel}
+                  sourceStatus={sourceStatus}
+                  remoteInfo={remoteInfo}
+                  inspectionLines={inspectionLines}
+                  sourceArrayName={sourceTableLabel}
+                  rowCount={displayedHoraireRows.length}
+                  firstRowPreview={getRowPreview(displayedHoraireRows[0])}
+                  lastRowPreview={getRowPreview(
+                    displayedHoraireRows[displayedHoraireRows.length - 1]
+                  )}
+                  rows={displayedHoraireRows}
+                  columns={HORAIRE_COLUMNS}
+                  dimHoraireColumns={false}
+                  selectedRowId={selectedRowId}
+                  onRowSelect={(row) => {
+                    setSelectedRowId(row.id);
+                    setRequestedEditorField(null);
+                  }}
+                  onCellEditRequest={(row, field) => {
+                    setSelectedRowId(row.id);
+                    setRequestedEditorField(field);
+                  }}
+                  onInlineComCommit={handleApplyComForSelectedTrain}
+                  onInlineHoraCommit={handleApplyHoraForSelectedTrain}
+                  onInlineTecnCommit={handleApplyTecnForSelectedTrain}
+                  onInlineConcCommit={handleApplyConcForSelectedTrain}
+                />
+              </div>
             </>
           ) : (
             <div

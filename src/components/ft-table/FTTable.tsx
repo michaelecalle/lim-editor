@@ -1,5 +1,5 @@
 import "./FTTable.css";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   EditorDirectField,
   EditorFtRowView,
@@ -11,6 +11,7 @@ import {
 
 type FTTableProps = {
   title?: string;
+  titleBadge?: ReactNode;
   directionLabel: string;
   sourceStatus: "idle" | "loading" | "success" | "error";
   remoteInfo: string;
@@ -32,7 +33,108 @@ type FTTableProps = {
   onInlineHoraCommit?: (rowId: string, nextHora: string) => void;
   onInlineTecnCommit?: (rowId: string, nextTecn: string) => void;
   onInlineConcCommit?: (rowId: string, nextConc: string) => void;
+  onDeleteRows?: (rowIds: string[]) => void;
+  onUpsertNote?: (targetRowId: string, noteLines: string[]) => void;
+  onInsertRowAbove?: (targetRowId: string) => void;
 };
+
+type FTTableContextMenuState = {
+  x: number;
+  y: number;
+  rowId: string;
+} | null;
+
+function getContextNoteActionLabel(
+  rows: EditorFtRowView[],
+  rowIndex: number
+): string {
+  const row = rows[rowIndex];
+
+  if (!row) {
+    return "Ajouter une note";
+  }
+
+  if (row.visual.isNoteOnly) {
+    return "Éditer cette note";
+  }
+
+  const previousRow = rowIndex > 0 ? rows[rowIndex - 1] : null;
+
+  if (previousRow?.visual.isNoteOnly) {
+    return "Éditer la note existante";
+  }
+
+  return "Ajouter une note";
+}
+
+function getDeleteConfirmationMessage(
+  rows: EditorFtRowView[],
+  rowIndex: number
+): string | null {
+  const row = rows[rowIndex];
+
+  if (!row) {
+    return null;
+  }
+
+  if (row.visual.isNoteOnly) {
+    return "Voulez-vous supprimer cette note ? Cela n’affectera pas la ligne associée.";
+  }
+
+  const previousRow = rowIndex > 0 ? rows[rowIndex - 1] : null;
+
+  if (previousRow?.visual.isNoteOnly) {
+    return "Voulez-vous supprimer cette ligne ? Cela supprimera aussi la note associée.";
+  }
+
+  return "Voulez-vous supprimer cette ligne ?";
+}
+
+function getRowIdsToDelete(
+  rows: EditorFtRowView[],
+  rowIndex: number
+): string[] {
+  const row = rows[rowIndex];
+
+  if (!row) {
+    return [];
+  }
+
+  if (row.visual.isNoteOnly) {
+    return [row.id];
+  }
+
+  const previousRow = rowIndex > 0 ? rows[rowIndex - 1] : null;
+
+  if (previousRow?.visual.isNoteOnly) {
+    return [previousRow.id, row.id];
+  }
+
+  return [row.id];
+}
+
+function getExistingNoteDisplayText(
+  rows: EditorFtRowView[],
+  rowIndex: number
+): string {
+  const row = rows[rowIndex];
+
+  if (!row) {
+    return "";
+  }
+
+  if (row.visual.isNoteOnly) {
+    return row.visible.noteDisplay ?? "";
+  }
+
+  const previousRow = rowIndex > 0 ? rows[rowIndex - 1] : null;
+
+  if (previousRow?.visual.isNoteOnly) {
+    return previousRow.visible.noteDisplay ?? "";
+  }
+
+  return "";
+}
 
 const NOTE_START_COLUMN_INDEX = 5;
 
@@ -172,7 +274,7 @@ function buildCalculatedNetworkBarMap(
 ): Record<string, boolean> {
   const result: Record<string, boolean> = {};
   let previousDataNetwork = "";
-  let hasPreviousDataRow = false;
+  let hasPreviousNonEmptyDataRow = false;
 
   for (const row of rows) {
     if (row.visual.isNoteOnly) {
@@ -182,10 +284,15 @@ function buildCalculatedNetworkBarMap(
 
     const currentNetwork = row.visible.networkDisplay.trim();
 
-    if (!hasPreviousDataRow) {
+    if (currentNetwork === "") {
+      result[row.id] = false;
+      continue;
+    }
+
+    if (!hasPreviousNonEmptyDataRow) {
       result[row.id] = false;
       previousDataNetwork = currentNetwork;
-      hasPreviousDataRow = true;
+      hasPreviousNonEmptyDataRow = true;
       continue;
     }
 
@@ -199,7 +306,7 @@ function buildCalculatedNetworkBarMap(
 function buildCalculatedRcBarMap(rows: EditorFtRowView[]): Record<string, boolean> {
   const result: Record<string, boolean> = {};
   let previousDataRc = "";
-  let hasPreviousDataRow = false;
+  let hasPreviousNonEmptyDataRow = false;
 
   for (const row of rows) {
     if (row.visual.isNoteOnly) {
@@ -209,10 +316,15 @@ function buildCalculatedRcBarMap(rows: EditorFtRowView[]): Record<string, boolea
 
     const currentRc = row.visible.rc.trim();
 
-    if (!hasPreviousDataRow) {
+    if (currentRc === "") {
+      result[row.id] = false;
+      continue;
+    }
+
+    if (!hasPreviousNonEmptyDataRow) {
       result[row.id] = false;
       previousDataRc = currentRc;
-      hasPreviousDataRow = true;
+      hasPreviousNonEmptyDataRow = true;
       continue;
     }
 
@@ -225,7 +337,6 @@ function buildCalculatedRcBarMap(rows: EditorFtRowView[]): Record<string, boolea
 
 function buildEffectiveVmaxMap(rows: EditorFtRowView[]): Record<string, string> {
   const result: Record<string, string> = {};
-  let previousDataVmax = "";
 
   for (const row of rows) {
     if (row.visual.isNoteOnly) {
@@ -233,15 +344,7 @@ function buildEffectiveVmaxMap(rows: EditorFtRowView[]): Record<string, string> 
       continue;
     }
 
-    const rawVmax = row.visible.vmax.trim();
-
-    if (rawVmax !== "") {
-      previousDataVmax = rawVmax;
-      result[row.id] = rawVmax;
-      continue;
-    }
-
-    result[row.id] = previousDataVmax;
+    result[row.id] = row.visible.vmax.trim();
   }
 
   return result;
@@ -253,7 +356,7 @@ function buildCalculatedVmaxBarMap(
 ): Record<string, boolean> {
   const result: Record<string, boolean> = {};
   let previousEffectiveVmax = "";
-  let hasPreviousDataRow = false;
+  let hasPreviousNonEmptyDataRow = false;
 
   for (const row of rows) {
     if (row.visual.isNoteOnly) {
@@ -261,12 +364,17 @@ function buildCalculatedVmaxBarMap(
       continue;
     }
 
-    const currentEffectiveVmax = effectiveVmaxMap[row.id] ?? "";
+    const currentEffectiveVmax = (effectiveVmaxMap[row.id] ?? "").trim();
 
-    if (!hasPreviousDataRow) {
+    if (currentEffectiveVmax === "") {
+      result[row.id] = false;
+      continue;
+    }
+
+    if (!hasPreviousNonEmptyDataRow) {
       result[row.id] = false;
       previousEffectiveVmax = currentEffectiveVmax;
-      hasPreviousDataRow = true;
+      hasPreviousNonEmptyDataRow = true;
       continue;
     }
 
@@ -279,7 +387,6 @@ function buildCalculatedVmaxBarMap(
 
 function buildEffectiveBloqueoMap(rows: EditorFtRowView[]): Record<string, string> {
   const result: Record<string, string> = {};
-  let previousDataBloqueo = "";
 
   for (const row of rows) {
     if (row.visual.isNoteOnly) {
@@ -287,15 +394,7 @@ function buildEffectiveBloqueoMap(rows: EditorFtRowView[]): Record<string, strin
       continue;
     }
 
-    const rawBloqueo = row.visible.bloqueo.trim();
-
-    if (rawBloqueo !== "") {
-      previousDataBloqueo = rawBloqueo;
-      result[row.id] = rawBloqueo;
-      continue;
-    }
-
-    result[row.id] = previousDataBloqueo;
+    result[row.id] = row.visible.bloqueo.trim();
   }
 
   return result;
@@ -307,7 +406,7 @@ function buildCalculatedBloqueoBarMap(
 ): Record<string, boolean> {
   const result: Record<string, boolean> = {};
   let previousEffectiveBloqueo = "";
-  let hasPreviousDataRow = false;
+  let hasPreviousNonEmptyDataRow = false;
 
   for (const row of rows) {
     if (row.visual.isNoteOnly) {
@@ -315,12 +414,17 @@ function buildCalculatedBloqueoBarMap(
       continue;
     }
 
-    const currentEffectiveBloqueo = effectiveBloqueoMap[row.id] ?? "";
+    const currentEffectiveBloqueo = (effectiveBloqueoMap[row.id] ?? "").trim();
 
-    if (!hasPreviousDataRow) {
+    if (currentEffectiveBloqueo === "") {
+      result[row.id] = false;
+      continue;
+    }
+
+    if (!hasPreviousNonEmptyDataRow) {
       result[row.id] = false;
       previousEffectiveBloqueo = currentEffectiveBloqueo;
-      hasPreviousDataRow = true;
+      hasPreviousNonEmptyDataRow = true;
       continue;
     }
 
@@ -464,6 +568,7 @@ function renderCellContent(
 
 export default function FTTable({
   title = "Tableau FT",
+  titleBadge,
   directionLabel,
   sourceStatus,
   remoteInfo,
@@ -482,6 +587,9 @@ export default function FTTable({
   onInlineHoraCommit,
   onInlineTecnCommit,
   onInlineConcCommit,
+  onDeleteRows,
+  onUpsertNote,
+  onInsertRowAbove,
 }: FTTableProps) {
   const calculatedNetworkBarMap = buildCalculatedNetworkBarMap(rows);
   const calculatedRcBarMap = buildCalculatedRcBarMap(rows);
@@ -501,6 +609,79 @@ export default function FTTable({
     column: "Com" | "Hora" | "Técn" | "Conc";
   } | null>(null);
   const [editingInlineInput, setEditingInlineInput] = useState("");
+  const [contextMenu, setContextMenu] = useState<FTTableContextMenuState>(null);
+  const longPressTimeoutRef = useRef<number | null>(null);
+  const longPressTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (contextMenu == null) {
+      return;
+    }
+
+    function handleGlobalPointerDown() {
+      setContextMenu(null);
+    }
+
+    function handleGlobalKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    }
+
+    window.addEventListener("pointerdown", handleGlobalPointerDown);
+    window.addEventListener("keydown", handleGlobalKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handleGlobalPointerDown);
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimeoutRef.current != null) {
+        window.clearTimeout(longPressTimeoutRef.current);
+        longPressTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  function clearLongPressTimeout(): void {
+    if (longPressTimeoutRef.current != null) {
+      window.clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  }
+
+  function startLongPress(
+    event: React.PointerEvent<HTMLTableRowElement>,
+    row: EditorFtRowView
+  ): void {
+    if (event.pointerType !== "touch") {
+      return;
+    }
+
+    clearLongPressTimeout();
+    longPressTriggeredRef.current = false;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    longPressTimeoutRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      onRowSelect(row);
+      setContextMenu({
+        x: startX,
+        y: startY,
+        rowId: row.id,
+      });
+      clearLongPressTimeout();
+    }, 600);
+  }
+
+  function cancelLongPress(): void {
+    clearLongPressTimeout();
+  }
 
   function getNextInlineValue(
     row: EditorFtRowView,
@@ -548,6 +729,107 @@ export default function FTTable({
     onInlineConcCommit?.(row.id, normalizedValue);
   }
 
+  function handleDeleteFromContextMenu(rowId: string): void {
+    const rowIndex = rows.findIndex((row) => row.id === rowId);
+
+    if (rowIndex === -1) {
+      setContextMenu(null);
+      return;
+    }
+
+    const message = getDeleteConfirmationMessage(rows, rowIndex);
+
+    if (message == null) {
+      setContextMenu(null);
+      return;
+    }
+
+    const confirmed = window.confirm(message);
+
+    if (!confirmed) {
+      setContextMenu(null);
+      return;
+    }
+
+    const rowIdsToDelete = getRowIdsToDelete(rows, rowIndex);
+
+    if (rowIdsToDelete.length > 0) {
+      onDeleteRows?.(rowIdsToDelete);
+    }
+
+    setContextMenu(null);
+  }
+
+  function handleNoteFromContextMenu(rowId: string): void {
+    const rowIndex = rows.findIndex((row) => row.id === rowId);
+
+    if (rowIndex === -1) {
+      setContextMenu(null);
+      return;
+    }
+
+    const existingText = getExistingNoteDisplayText(rows, rowIndex);
+    const promptValue = window.prompt("Texte de la note :", existingText);
+
+    if (promptValue == null) {
+      setContextMenu(null);
+      return;
+    }
+
+    const noteLines = promptValue
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== "");
+
+    if (noteLines.length === 0) {
+      setContextMenu(null);
+      return;
+    }
+
+    onUpsertNote?.(rowId, noteLines);
+    setContextMenu(null);
+  }
+
+function handleInsertAboveFromContextMenu(rowId: string): void {
+  onInsertRowAbove?.(rowId);
+  setContextMenu(null);
+}
+
+function handleInsertBelowFromContextMenu(rowId: string): void {
+  const rowIndex = rows.findIndex((row) => row.id === rowId);
+
+  if (rowIndex === -1) {
+    setContextMenu(null);
+    return;
+  }
+
+  const row = rows[rowIndex];
+
+  if (row.visual.isNoteOnly) {
+    const associatedDataRow = rows[rowIndex + 1];
+    const rowAfterAssociatedData = rows[rowIndex + 2];
+
+    if (rowAfterAssociatedData) {
+      onInsertRowAbove?.(rowAfterAssociatedData.id);
+    } else if (associatedDataRow) {
+      onInsertRowAbove?.(associatedDataRow.id);
+    }
+
+    setContextMenu(null);
+    return;
+  }
+
+  const nextRow = rows[rowIndex + 1];
+
+  if (nextRow) {
+    onInsertRowAbove?.(nextRow.id);
+  } else {
+    onInsertRowAbove?.(row.id);
+  }
+
+  setContextMenu(null);
+}
+
   function moveToNextInlineCell(
     currentRowId: string,
     column: "Com" | "Hora" | "Técn" | "Conc"
@@ -588,9 +870,20 @@ export default function FTTable({
 
   return (
     <div className="ft-table-placeholder">
-      <div className="ft-table-placeholder__title">{title}</div>
+      <div
+        className="ft-table-placeholder__title"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <span>{title}</span>
+        {titleBadge}
+      </div>
 
-      <div className="ft-table-v0-wrapper">
+          <div className="ft-table-v0-wrapper">
         <table className="ft-table-v0">
           <thead>
             <tr>
@@ -626,7 +919,35 @@ export default function FTTable({
                   <tr
                     key={row.id}
                     className={`ft-table-v0__note-row ${rowClassName}`.trim()}
-                    onClick={() => onRowSelect(row)}
+                    onClick={() => {
+                      if (longPressTriggeredRef.current) {
+                        longPressTriggeredRef.current = false;
+                        return;
+                      }
+
+                      onRowSelect(row);
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      onRowSelect(row);
+                      setContextMenu({
+                        x: event.clientX,
+                        y: event.clientY,
+                        rowId: row.id,
+                      });
+                    }}
+                    onPointerDown={(event) => {
+                      startLongPress(event, row);
+                    }}
+                    onPointerUp={() => {
+                      cancelLongPress();
+                    }}
+                    onPointerCancel={() => {
+                      cancelLongPress();
+                    }}
+                    onPointerMove={() => {
+                      cancelLongPress();
+                    }}
                   >
                     {displayedColumns
                       .slice(0, NOTE_START_COLUMN_INDEX)
@@ -653,7 +974,35 @@ export default function FTTable({
                 <tr
                   key={row.id}
                   className={rowClassName}
-                  onClick={() => onRowSelect(row)}
+                  onClick={() => {
+                    if (longPressTriggeredRef.current) {
+                      longPressTriggeredRef.current = false;
+                      return;
+                    }
+
+                    onRowSelect(row);
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    onRowSelect(row);
+                    setContextMenu({
+                      x: event.clientX,
+                      y: event.clientY,
+                      rowId: row.id,
+                    });
+                  }}
+                  onPointerDown={(event) => {
+                    startLongPress(event, row);
+                  }}
+                  onPointerUp={() => {
+                    cancelLongPress();
+                  }}
+                  onPointerCancel={() => {
+                    cancelLongPress();
+                  }}
+                  onPointerMove={() => {
+                    cancelLongPress();
+                  }}
                 >
                   {displayedColumns.map((column) => {
                     const isHoraire = isHoraireColumn(column);
@@ -819,6 +1168,99 @@ export default function FTTable({
             })}
           </tbody>
         </table>
+
+        {contextMenu != null ? (() => {
+          const contextRowIndex = rows.findIndex((row) => row.id === contextMenu.rowId);
+          const noteActionLabel =
+            contextRowIndex >= 0
+              ? getContextNoteActionLabel(rows, contextRowIndex)
+              : "Ajouter une note";
+
+          return (
+            <div
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              style={{
+                position: "fixed",
+                top: contextMenu.y,
+                left: contextMenu.x,
+                zIndex: 1000,
+                minWidth: 220,
+                background: "#ffffff",
+                border: "1px solid #d1d5db",
+                borderRadius: 12,
+                boxShadow: "0 12px 32px rgba(0, 0, 0, 0.16)",
+                padding: 8,
+              }}
+            >
+              {[
+                "Insérer une ligne au-dessus",
+                "Insérer une ligne en dessous",
+                "Supprimer cette ligne",
+                noteActionLabel,
+              ].map((label) => {
+                const isInsertAboveAction = label === "Insérer une ligne au-dessus";
+                const isInsertBelowAction = label === "Insérer une ligne en dessous";
+                const isDeleteAction = label === "Supprimer cette ligne";
+                const isNoteAction = label === noteActionLabel;
+const isEnabled =
+  isInsertAboveAction ||
+  isInsertBelowAction ||
+  isDeleteAction ||
+  isNoteAction;
+
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={!isEnabled}
+                    onClick={(event) => {
+                      event.stopPropagation();
+
+                      if (contextMenu == null) {
+                        return;
+                      }
+
+                      if (isInsertAboveAction) {
+                        handleInsertAboveFromContextMenu(contextMenu.rowId);
+                        return;
+                      }
+if (isInsertBelowAction) {
+  handleInsertBelowFromContextMenu(contextMenu.rowId);
+  return;
+}
+                      if (isDeleteAction) {
+                        handleDeleteFromContextMenu(contextMenu.rowId);
+                        return;
+                      }
+
+                      if (isNoteAction) {
+                        handleNoteFromContextMenu(contextMenu.rowId);
+                      }
+                    }}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "10px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: isEnabled ? "#111827" : "#6b7280",
+                      cursor: isEnabled ? "pointer" : "not-allowed",
+                      borderRadius: 8,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })() : null}
       </div>
 
       <div className="ft-table-placeholder__text">

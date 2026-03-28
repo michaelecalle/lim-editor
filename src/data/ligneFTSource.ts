@@ -1,5 +1,8 @@
 import type { EditorDirection } from "../modules/ft-editor/types/viewTypes";
-import type { FtSourceDirectionTables } from "../modules/ft-editor/types/sourceTypes";
+import type {
+  FtSourceDirectionTables,
+  FtSourceTrainData,
+} from "../modules/ft-editor/types/sourceTypes";
 
 export const LIGNE_FT_RAW_URL =
   "https://raw.githubusercontent.com/michaelecalle/lim-editor/main/src/data/ligneFT.normalized.ts";
@@ -124,6 +127,27 @@ function extractObjectLiteral(rawText: string, exportName: string): string | nul
   return null;
 }
 
+function sanitizePublishedTrains(
+  trains: FtSourceDirectionTables["trains"] | undefined
+): FtSourceDirectionTables["trains"] | undefined {
+  if (trains == null) {
+    return undefined;
+  }
+
+  const nextTrains: NonNullable<FtSourceDirectionTables["trains"]> = {};
+
+  for (const [trainNumber, trainData] of Object.entries(trains)) {
+    const { publishState: _publishState, ...restTrainData } =
+      trainData as FtSourceTrainData & {
+        publishState?: unknown;
+      };
+
+    nextTrains[trainNumber] = restTrainData;
+  }
+
+  return nextTrains;
+}
+
 function evaluateObjectLiteral(objectLiteral: string): FtSourceDirectionTables {
   const evaluator = new Function(`return (${objectLiteral});`);
   const value = evaluator();
@@ -170,8 +194,9 @@ function evaluateObjectLiteral(objectLiteral: string): FtSourceDirectionTables {
     sudNord: {
       rows: sudNordRows,
     },
-    trains:
-      trains != null ? (trains as FtSourceDirectionTables["trains"]) : undefined,
+    trains: sanitizePublishedTrains(
+      trains != null ? (trains as FtSourceDirectionTables["trains"]) : undefined
+    ),
   };
 }
 
