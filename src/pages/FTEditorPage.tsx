@@ -656,6 +656,7 @@ export default function FTEditorPage() {
   const [exportDiagnostics, setExportDiagnostics] = useState<string[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+    const [publishSuccessMessage, setPublishSuccessMessage] = useState<string | null>(null);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [isRestoreListLoading, setIsRestoreListLoading] = useState(false);
   const [restoreArchives, setRestoreArchives] = useState<
@@ -1777,6 +1778,7 @@ export default function FTEditorPage() {
     setExportStatus("idle");
     setExportMessage("Aucun export local effectué.");
     setExportDiagnostics([]);
+    setPublishSuccessMessage(null);
     setIsPublishDialogOpen(true);
   }, [hasUnpublishedChanges, isPublishing]);
 
@@ -1785,6 +1787,7 @@ export default function FTEditorPage() {
       return;
     }
 
+    setPublishSuccessMessage(null);
     setIsPublishDialogOpen(false);
   }, [isPublishing]);
 
@@ -1881,7 +1884,9 @@ export default function FTEditorPage() {
           ? `Archives purgées : ${response.diagnostic.purgedArchives.join(", ")}`
           : "Aucune archive à purger.",
       ]);
-      setIsPublishDialogOpen(false);
+      setPublishSuccessMessage(
+        "La publication a bien été effectuée. La mise à jour peut nécessiter quelques minutes avant d’être visible sur les versions en ligne."
+      );
     } catch (error) {
       setExportStatus("error");
       setExportMessage(
@@ -2881,6 +2886,7 @@ export default function FTEditorPage() {
         open={isPublishDialogOpen}
         isBusy={isPublishing}
         errorMessage={exportStatus === "error" ? exportMessage : null}
+        successMessage={publishSuccessMessage}
         onCancel={handleCancelPublish}
         onConfirm={handleConfirmPublish}
       />

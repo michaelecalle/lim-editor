@@ -2,6 +2,7 @@ type PublishConfirmDialogProps = {
   open: boolean;
   isBusy?: boolean;
   errorMessage?: string | null;
+  successMessage?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -10,12 +11,15 @@ export default function PublishConfirmDialog({
   open,
   isBusy = false,
   errorMessage = null,
+  successMessage = null,
   onCancel,
   onConfirm,
 }: PublishConfirmDialogProps) {
   if (!open) {
     return null;
   }
+
+  const isSuccess = successMessage != null && successMessage.trim() !== "";
 
   return (
     <div
@@ -53,18 +57,31 @@ export default function PublishConfirmDialog({
             marginBottom: 12,
           }}
         >
-          Confirmer la mise en ligne
+          {isSuccess ? "Publication réussie" : "Confirmer la mise en ligne"}
         </div>
 
         <div
           style={{
             color: "#374151",
             lineHeight: 1.5,
-            marginBottom: errorMessage ? 12 : 18,
+            marginBottom: errorMessage || successMessage ? 12 : 18,
           }}
         >
-          Attention, vous vous apprêtez à remplacer la version actuellement en
-          service. Êtes-vous sûr ?
+          {isSuccess ? (
+            <>
+              La version a bien été publiée.
+              <br />
+              Les fichiers ont été mis à jour, mais la prise en compte sur les
+              versions en ligne peut nécessiter quelques minutes.
+              <br />
+              Rechargez la page dans quelques instants pour vérifier le résultat.
+            </>
+          ) : (
+            <>
+              Attention, vous vous apprêtez à remplacer la version actuellement
+              en service. Êtes-vous sûr ?
+            </>
+          )}
         </div>
 
         {errorMessage ? (
@@ -83,6 +100,22 @@ export default function PublishConfirmDialog({
           </div>
         ) : null}
 
+        {successMessage ? (
+          <div
+            style={{
+              marginBottom: 18,
+              padding: 12,
+              border: "1px solid #86efac",
+              borderRadius: 12,
+              background: "#f0fdf4",
+              color: "#166534",
+              lineHeight: 1.5,
+            }}
+          >
+            {successMessage}
+          </div>
+        ) : null}
+
         <div
           style={{
             display: "flex",
@@ -91,31 +124,46 @@ export default function PublishConfirmDialog({
             flexWrap: "wrap",
           }}
         >
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isBusy}
-            style={{
-              padding: "10px 14px",
-              cursor: isBusy ? "not-allowed" : "pointer",
-              opacity: isBusy ? 0.55 : 1,
-            }}
-          >
-            Annuler
-          </button>
+          {isSuccess ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                padding: "10px 14px",
+                cursor: "pointer",
+              }}
+            >
+              Fermer
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={isBusy}
+                style={{
+                  padding: "10px 14px",
+                  cursor: isBusy ? "not-allowed" : "pointer",
+                  opacity: isBusy ? 0.55 : 1,
+                }}
+              >
+                Annuler
+              </button>
 
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isBusy}
-            style={{
-              padding: "10px 14px",
-              cursor: isBusy ? "not-allowed" : "pointer",
-              opacity: isBusy ? 0.55 : 1,
-            }}
-          >
-            {isBusy ? "Publication en cours..." : "Confirmer la mise en ligne"}
-          </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={isBusy}
+                style={{
+                  padding: "10px 14px",
+                  cursor: isBusy ? "not-allowed" : "pointer",
+                  opacity: isBusy ? 0.55 : 1,
+                }}
+              >
+                {isBusy ? "Publication en cours..." : "Confirmer la mise en ligne"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
