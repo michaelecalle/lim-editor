@@ -544,7 +544,7 @@ function buildPublishedSourceForPublish(
   source: FtSourceDirectionTables
 ): LigneFTNormalized {
   if (!source.trains) {
-    return source as LigneFTNormalized;
+    return source as unknown as LigneFTNormalized;
   }
 
   const nextTrains: NonNullable<LigneFTNormalized["trains"]> = {};
@@ -601,7 +601,7 @@ function buildPublishedSourceForPublish(
   return {
     ...source,
     trains: nextTrains,
-  };
+  } as unknown as LigneFTNormalized;
 }
 
 export default function FTEditorPage() {
@@ -1863,11 +1863,11 @@ export default function FTEditorPage() {
 
     try {
       const materializedSource = materializeComputedConcForPublish(parsedSource);
-      const publishedSource = buildPublishedSourceForPublish(materializedSource);
-      const response = await publishLigneFtData(publishedSource);
+      const publishedPayload = buildPublishedSourceForPublish(materializedSource);
+      const response = await publishLigneFtData(publishedPayload);
 
-      setParsedSource(publishedSource);
-      setReferenceData(publishedSource);
+      setParsedSource(materializedSource);
+      setReferenceData(materializedSource);
       setExportStatus("success");
       setExportMessage(
         `Publication réussie : fichier actif mis à jour dans LIM Editor et JSON actif publié aussi vers LIM2, archive créée ${response.diagnostic.archiveCreated.name}.`
