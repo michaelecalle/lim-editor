@@ -447,8 +447,9 @@ export function validateNormalizedFtSource(
           continue;
         }
 
-        const meta = trainData["meta"];
-        const byRowKey = trainData["byRowKey"];
+        const legacyTrainData = trainData as unknown as Record<string, unknown>;
+        const meta = legacyTrainData["meta"];
+        const byRowKey = legacyTrainData["byRowKey"];
 
         if (!isPlainObject(meta)) {
           diagnostics.push(`trains.${trainNumber}.meta invalide : objet attendu.`);
