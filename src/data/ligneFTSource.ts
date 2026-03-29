@@ -336,6 +336,117 @@ export function validateNormalizedFtSource(
           continue;
         }
 
+        const rawVariants = trainData["variants"];
+
+        if (rawVariants != null) {
+          if (!Array.isArray(rawVariants)) {
+            diagnostics.push(`trains.${trainNumber}.variants invalide : tableau attendu.`);
+            continue;
+          }
+
+          rawVariants.forEach((variant, variantIndex) => {
+            if (!isPlainObject(variant)) {
+              diagnostics.push(
+                `trains.${trainNumber}.variants[${variantIndex}] invalide : objet attendu.`
+              );
+              return;
+            }
+
+            const meta = variant["meta"];
+            const byRowKey = variant["byRowKey"];
+
+            if (!isPlainObject(meta)) {
+              diagnostics.push(
+                `trains.${trainNumber}.variants[${variantIndex}].meta invalide : objet attendu.`
+              );
+            } else {
+              if (typeof meta["origine"] !== "string") {
+                diagnostics.push(
+                  `trains.${trainNumber}.variants[${variantIndex}].meta.origine invalide : chaîne attendue.`
+                );
+              }
+
+              if (typeof meta["destination"] !== "string") {
+                diagnostics.push(
+                  `trains.${trainNumber}.variants[${variantIndex}].meta.destination invalide : chaîne attendue.`
+                );
+              }
+
+              const validity = meta["validity"];
+
+              if (!isPlainObject(validity)) {
+                diagnostics.push(
+                  `trains.${trainNumber}.variants[${variantIndex}].meta.validity invalide : objet attendu.`
+                );
+              } else {
+                if (typeof validity["startDate"] !== "string") {
+                  diagnostics.push(
+                    `trains.${trainNumber}.variants[${variantIndex}].meta.validity.startDate invalide : chaîne attendue.`
+                  );
+                }
+
+                if (typeof validity["endDate"] !== "string") {
+                  diagnostics.push(
+                    `trains.${trainNumber}.variants[${variantIndex}].meta.validity.endDate invalide : chaîne attendue.`
+                  );
+                }
+
+                const days = validity["days"];
+
+                if (!isPlainObject(days)) {
+                  diagnostics.push(
+                    `trains.${trainNumber}.variants[${variantIndex}].meta.validity.days invalide : objet attendu.`
+                  );
+                } else {
+                  for (const dayName of [
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                    "sunday",
+                  ] as const) {
+                    if (typeof days[dayName] !== "boolean") {
+                      diagnostics.push(
+                        `trains.${trainNumber}.variants[${variantIndex}].meta.validity.days.${dayName} invalide : booléen attendu.`
+                      );
+                    }
+                  }
+                }
+              }
+            }
+
+            if (!isPlainObject(byRowKey)) {
+              diagnostics.push(
+                `trains.${trainNumber}.variants[${variantIndex}].byRowKey invalide : objet attendu.`
+              );
+              return;
+            }
+
+            for (const [rowKey, rowData] of Object.entries(byRowKey)) {
+              if (!isPlainObject(rowData)) {
+                diagnostics.push(
+                  `trains.${trainNumber}.variants[${variantIndex}].byRowKey.${rowKey} invalide : objet attendu.`
+                );
+                continue;
+              }
+
+              for (const fieldName of ["com", "hora", "tecn", "conc"] as const) {
+                const fieldValue = rowData[fieldName];
+
+                if (fieldValue != null && typeof fieldValue !== "string") {
+                  diagnostics.push(
+                    `trains.${trainNumber}.variants[${variantIndex}].byRowKey.${rowKey}.${fieldName} invalide : chaîne attendue.`
+                  );
+                }
+              }
+            }
+          });
+
+          continue;
+        }
+
         const meta = trainData["meta"];
         const byRowKey = trainData["byRowKey"];
 
@@ -377,8 +488,7 @@ export function validateNormalizedFtSource(
   }
 
   const hasStructuralError = diagnostics.some(
-    (line) =>
-      line.includes("invalide") || line.includes("absent ou invalide")
+    (line) => line.includes("invalide") || line.includes("absent ou invalide")
   );
 
   return {
