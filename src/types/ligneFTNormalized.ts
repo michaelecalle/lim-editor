@@ -34,9 +34,42 @@ export type FtTrainMeta = {
   destination: string;
 };
 
+export type FtTrainVariantDays = {
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+};
+
+export type FtTrainVariantValidity = {
+  startDate: string;
+  endDate: string;
+  days: FtTrainVariantDays;
+};
+
+export type FtTrainRowData = {
+  com?: string;
+  hora?: string;
+  tecn?: string;
+  conc?: string;
+};
+
+export type FtTrainVariantMeta = FtTrainMeta & {
+  validity: FtTrainVariantValidity;
+};
+
+export type FtTrainVariantData = {
+  meta: FtTrainVariantMeta;
+  byRowKey: Record<string, FtTrainRowData>;
+};
+
 export type FtTrainData = {
   meta: FtTrainMeta;
   byRowKey: Record<string, unknown>;
+  variants?: FtTrainVariantData[];
 };
 
 export type LigneFTNormalized = {

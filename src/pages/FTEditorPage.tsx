@@ -1,3 +1,4 @@
+import type { LigneFTNormalized } from "../types/ligneFTNormalized";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ArchiveListModal from "../components/ArchiveListModal";
 import EditorStatusBanner from "../components/EditorStatusBanner";
@@ -16,7 +17,9 @@ import type {
 import type {
   FtSourceDirectionTables,
   FtSourceTrainData,
+  FtSourceTrainMeta,
   FtSourceTrainRowData,
+  FtSourceTrainVariantData,
 } from "../modules/ft-editor/types/sourceTypes";
 import {
   buildNormalizedFtSourceFileContent,
@@ -31,9 +34,7 @@ import {
   fetchLigneFtArchives,
   publishLigneFtData,
 } from "../modules/ft-editor/api/ligneftApi";
-import {
-  HORAIRE_COLUMNS,
-} from "../modules/ft-editor/constants/ftColumns";
+import { HORAIRE_COLUMNS } from "../modules/ft-editor/constants/ftColumns";
 import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRows";
 import { areSourceTablesEqual } from "../modules/ft-editor/utils/areSourceTablesEqual";
 
@@ -123,15 +124,327 @@ function removeLeadingZeros(trainNumber: string): string {
   return normalized === "" ? "0" : normalized;
 }
 
-function buildEmptyLocalTrainData(): FtSourceTrainData {
+function buildDefaultVariantValidity() {
+  return {
+    startDate: "",
+    endDate: "",
+    days: {
+      monday: true,
+      tuesday: true,
+      wednesday: true,
+      thursday: true,
+      friday: true,
+      saturday: true,
+      sunday: true,
+    },
+  };
+}
+
+function formatVariantDateForDisplay(value: string): string {
+  const trimmed = value.trim();
+
+  if (trimmed === "") {
+    return "—";
+  }
+
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return trimmed;
+  }
+
+  const [, year, month, day] = match;
+  return `${day}/${month}/${year}`;
+}
+
+function buildEmptyLocalTrainVariantData(): FtSourceTrainVariantData {
   return {
     meta: {
       origine: "",
       destination: "",
+      validity: buildDefaultVariantValidity(),
     },
     byRowKey: {},
+  };
+}
+
+function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
+  const rawTrainData = trainData as unknown;
+
+  if (!isRecord(rawTrainData)) {
+    return {
+      origine: "",
+      destination: "",
+    };
+  }
+
+  const rawMeta = rawTrainData["meta"];
+
+  if (!isRecord(rawMeta)) {
+    return {
+      origine: "",
+      destination: "",
+    };
+  }
+
+  return {
+    origine: typeof rawMeta["origine"] === "string" ? rawMeta["origine"] : "",
+    destination:
+      typeof rawMeta["destination"] === "string" ? rawMeta["destination"] : "",
+  };
+}
+
+function buildLegacyTrainByRowKey(
+  trainData: FtSourceTrainData
+): Record<string, FtSourceTrainRowData> {
+  const rawTrainData = trainData as unknown;
+
+  if (!isRecord(rawTrainData)) {
+    return {};
+  }
+
+  const rawByRowKey = rawTrainData["byRowKey"];
+
+  if (!isRecord(rawByRowKey)) {
+    return {};
+  }
+
+  return rawByRowKey as Record<string, FtSourceTrainRowData>;
+}
+
+function getVariantCount(trainData: FtSourceTrainData | undefined): number {
+  if (!trainData) {
+    return 0;
+  }
+
+  if (Array.isArray(trainData.variants) && trainData.variants.length > 0) {
+    return trainData.variants.length;
+  }
+
+  return 1;
+}
+
+function getVariantAtIndex(
+  trainData: FtSourceTrainData | undefined,
+  variantIndex: number
+): FtSourceTrainVariantData | null {
+  if (!trainData) {
+    return null;
+  }
+
+  if (Array.isArray(trainData.variants) && trainData.variants.length > 0) {
+    if (variantIndex < 0 || variantIndex >= trainData.variants.length) {
+      return null;
+    }
+
+    return trainData.variants[variantIndex] ?? null;
+  }
+
+  if (variantIndex !== 0) {
+    return null;
+  }
+
+  return {
+    meta: {
+      ...buildLegacyTrainMeta(trainData),
+      validity: buildDefaultVariantValidity(),
+    },
+    byRowKey: buildLegacyTrainByRowKey(trainData),
+  };
+}
+
+function replaceVariantAtIndex(
+  trainData: FtSourceTrainData,
+  variantIndex: number,
+  nextVariant: FtSourceTrainVariantData
+): FtSourceTrainData {
+  if (Array.isArray(trainData.variants) && trainData.variants.length > 0) {
+    if (variantIndex < 0 || variantIndex >= trainData.variants.length) {
+      return trainData;
+    }
+
+    return {
+      ...trainData,
+      variants: trainData.variants.map((variant, index) =>
+        index === variantIndex ? nextVariant : variant
+      ),
+    };
+  }
+
+  if (variantIndex !== 0) {
+    return trainData;
+  }
+
+  return {
+    publishState: trainData.publishState,
+    variants: [nextVariant],
+  };
+}
+
+function buildEmptyLocalTrainData(): FtSourceTrainData {
+  return {
+    variants: [buildEmptyLocalTrainVariantData()],
     publishState: "local",
   };
+}
+
+function getVariantActiveDayCount(days: {
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+}): number {
+  return Object.values(days).filter(Boolean).length;
+}
+
+function getOverlappingVariantDayLabels(
+  firstDays: {
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+  },
+  secondDays: {
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+  }
+): string[] {
+  const overlappingDays: string[] = [];
+
+  if (firstDays.monday && secondDays.monday) {
+    overlappingDays.push("L");
+  }
+
+  if (firstDays.tuesday && secondDays.tuesday) {
+    overlappingDays.push("M");
+  }
+
+  if (firstDays.wednesday && secondDays.wednesday) {
+    overlappingDays.push("M");
+  }
+
+  if (firstDays.thursday && secondDays.thursday) {
+    overlappingDays.push("J");
+  }
+
+  if (firstDays.friday && secondDays.friday) {
+    overlappingDays.push("V");
+  }
+
+  if (firstDays.saturday && secondDays.saturday) {
+    overlappingDays.push("S");
+  }
+
+  if (firstDays.sunday && secondDays.sunday) {
+    overlappingDays.push("D");
+  }
+
+  return overlappingDays;
+}
+
+function doVariantDaysOverlap(
+  firstDays: {
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+  },
+  secondDays: {
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+  }
+): boolean {
+  return getOverlappingVariantDayLabels(firstDays, secondDays).length > 0;
+}
+
+function normalizeVariantDateRange(startDate: string, endDate: string): {
+  normalizedStart: string;
+  normalizedEnd: string;
+} {
+  return {
+    normalizedStart: startDate.trim() === "" ? "0000-01-01" : startDate.trim(),
+    normalizedEnd: endDate.trim() === "" ? "9999-12-31" : endDate.trim(),
+  };
+}
+
+function doVariantDateRangesOverlap(
+  firstStartDate: string,
+  firstEndDate: string,
+  secondStartDate: string,
+  secondEndDate: string
+): boolean {
+  const firstRange = normalizeVariantDateRange(firstStartDate, firstEndDate);
+  const secondRange = normalizeVariantDateRange(secondStartDate, secondEndDate);
+
+  return (
+    firstRange.normalizedStart <= secondRange.normalizedEnd &&
+    secondRange.normalizedStart <= firstRange.normalizedEnd
+  );
+}
+
+function getConflictingVariantIndex(
+  variants: FtSourceTrainVariantData[],
+  currentVariantIndex: number,
+  draftValidity: {
+    startDate: string;
+    endDate: string;
+    days: {
+      monday: boolean;
+      tuesday: boolean;
+      wednesday: boolean;
+      thursday: boolean;
+      friday: boolean;
+      saturday: boolean;
+      sunday: boolean;
+    };
+  }
+): number | null {
+  for (let index = 0; index < variants.length; index += 1) {
+    if (index === currentVariantIndex) {
+      continue;
+    }
+
+    const otherVariant = variants[index];
+    const otherValidity = otherVariant.meta.validity;
+
+    if (!doVariantDaysOverlap(draftValidity.days, otherValidity.days)) {
+      continue;
+    }
+
+    if (
+      !doVariantDateRangesOverlap(
+        draftValidity.startDate,
+        draftValidity.endDate,
+        otherValidity.startDate,
+        otherValidity.endDate
+      )
+    ) {
+      continue;
+    }
+
+    return index;
+  }
+
+  return null;
 }
 
 function isTrainNumberInputValid(value: string): boolean {
@@ -157,15 +470,22 @@ function materializeComputedConcForPublish(
       continue;
     }
 
+    const selectedVariant = getVariantAtIndex(trainData, 0);
+
+    if (!selectedVariant) {
+      nextTrains[trainNumber] = trainData;
+      continue;
+    }
+
     const orderedRows = getDirectionRows(source, direction);
     let previousHoraMinutes: number | null = null;
     let trainChanged = false;
     const nextByRowKey: Record<string, FtSourceTrainRowData> = {
-      ...trainData.byRowKey,
+      ...selectedVariant.byRowKey,
     };
 
     for (const row of orderedRows) {
-      const existingRowData = trainData.byRowKey[row.id] as
+      const existingRowData = selectedVariant.byRowKey[row.id] as
         | FtSourceTrainRowData
         | undefined;
 
@@ -199,10 +519,10 @@ function materializeComputedConcForPublish(
     }
 
     nextTrains[trainNumber] = trainChanged
-      ? {
-          ...trainData,
+      ? replaceVariantAtIndex(trainData, 0, {
+          ...selectedVariant,
           byRowKey: nextByRowKey,
-        }
+        })
       : trainData;
 
     if (trainChanged) {
@@ -220,18 +540,62 @@ function materializeComputedConcForPublish(
   };
 }
 
-function clearLocalPublishState(
+function buildPublishedSourceForPublish(
   source: FtSourceDirectionTables
-): FtSourceDirectionTables {
+): LigneFTNormalized {
   if (!source.trains) {
-    return source;
+    return source as LigneFTNormalized;
   }
 
-  const nextTrains: NonNullable<FtSourceDirectionTables["trains"]> = {};
+  const nextTrains: NonNullable<LigneFTNormalized["trains"]> = {};
 
   for (const [trainNumber, trainData] of Object.entries(source.trains)) {
-    const { publishState: _publishState, ...restTrainData } = trainData;
-    nextTrains[trainNumber] = restTrainData;
+    const primaryVariant = getVariantAtIndex(trainData, 0);
+
+    if (!primaryVariant) {
+      nextTrains[trainNumber] = {
+        meta: buildLegacyTrainMeta(trainData),
+        byRowKey: buildLegacyTrainByRowKey(trainData),
+      };
+      continue;
+    }
+
+    const variants =
+      Array.isArray(trainData.variants) && trainData.variants.length > 0
+        ? trainData.variants.map((variant) => ({
+            meta: {
+              origine: variant.meta.origine,
+              destination: variant.meta.destination,
+              validity: {
+                startDate: variant.meta.validity.startDate,
+                endDate: variant.meta.validity.endDate,
+                days: {
+                  monday: variant.meta.validity.days.monday,
+                  tuesday: variant.meta.validity.days.tuesday,
+                  wednesday: variant.meta.validity.days.wednesday,
+                  thursday: variant.meta.validity.days.thursday,
+                  friday: variant.meta.validity.days.friday,
+                  saturday: variant.meta.validity.days.saturday,
+                  sunday: variant.meta.validity.days.sunday,
+                },
+              },
+            },
+            byRowKey: {
+              ...variant.byRowKey,
+            },
+          }))
+        : undefined;
+
+    nextTrains[trainNumber] = {
+      meta: {
+        origine: primaryVariant.meta.origine,
+        destination: primaryVariant.meta.destination,
+      },
+      byRowKey: {
+        ...primaryVariant.byRowKey,
+      },
+      ...(variants ? { variants } : {}),
+    };
   }
 
   return {
@@ -259,7 +623,12 @@ export default function FTEditorPage() {
       }
     >
   >({});
-  const [horaireValidationError, setHoraireValidationError] = useState<string | null>(null);
+  const [selectedVariantIndexByTrain, setSelectedVariantIndexByTrain] = useState<
+    Record<string, number>
+  >({});
+  const [horaireValidationError, setHoraireValidationError] = useState<
+    string | null
+  >(null);
   const [sourceStatus, setSourceStatus] = useState<SourceStatus>("idle");
   const [remoteInfo, setRemoteInfo] = useState<string>(
     "Aucune tentative de chargement."
@@ -278,9 +647,9 @@ export default function FTEditorPage() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [requestedEditorField, setRequestedEditorField] =
     useState<EditorDirectField | null>(null);
-  const [exportStatus, setExportStatus] = useState<"idle" | "success" | "error">(
-    "idle"
-  );
+  const [exportStatus, setExportStatus] = useState<
+    "idle" | "success" | "error"
+  >("idle");
   const [exportMessage, setExportMessage] = useState<string>(
     "Aucun export local effectué."
   );
@@ -310,6 +679,40 @@ export default function FTEditorPage() {
     useState<"yes" | "no" | null>(null);
   const [isDeleteTrainConfirmOpen, setIsDeleteTrainConfirmOpen] =
     useState(false);
+  const [pendingVariantDeleteIndex, setPendingVariantDeleteIndex] = useState<
+    number | null
+  >(null);
+  const [variantValidityDraft, setVariantValidityDraft] = useState<{
+    trainNumber: string;
+    variantIndex: number;
+    startDate: string;
+    endDate: string;
+    days: {
+      monday: boolean;
+      tuesday: boolean;
+      wednesday: boolean;
+      thursday: boolean;
+      friday: boolean;
+      saturday: boolean;
+      sunday: boolean;
+    };
+  }>({
+    trainNumber: "",
+    variantIndex: -1,
+    startDate: "",
+    endDate: "",
+    days: buildDefaultVariantValidity().days,
+  });
+  const [openVariantValidityEditor, setOpenVariantValidityEditor] = useState<{
+    trainNumber: string;
+    variantIndex: number;
+  }>({
+    trainNumber: "",
+    variantIndex: -1,
+  });
+  const [variantValidityError, setVariantValidityError] = useState<string | null>(
+    null
+  );
 
   const directionLabel = getDirectionLabel(direction);
   const sourceTableLabel = getSourceTableLabel(direction);
@@ -487,10 +890,18 @@ export default function FTEditorPage() {
     return getDirectionRows(parsedSource, direction);
   }, [parsedSource, direction]);
 
-  const horaireRows = useMemo(() => {
-    const selectedTrain = parsedSource.trains?.[selectedTrainNumber];
+  const selectedVariantIndex =
+    selectedVariantIndexByTrain[selectedTrainNumber] ?? 0;
 
-    if (!selectedTrain) {
+  const selectedTrainData = parsedSource.trains?.[selectedTrainNumber];
+  const selectedVariantCount = getVariantCount(selectedTrainData);
+  const selectedVariant = getVariantAtIndex(
+    selectedTrainData,
+    selectedVariantIndex
+  );
+
+  const horaireRows = useMemo(() => {
+    if (!selectedVariant) {
       return sourceRows.map((row) => ({
         ...row,
         visual: {
@@ -528,7 +939,7 @@ export default function FTEditorPage() {
     let previousHoraMinutes: number | null = null;
 
     return sourceRows.map((row) => {
-      const rowTrainData = selectedTrain.byRowKey[row.id] as
+      const rowTrainData = selectedVariant.byRowKey[row.id] as
         | FtSourceTrainRowData
         | undefined;
 
@@ -542,10 +953,7 @@ export default function FTEditorPage() {
       const currentHoraMinutes = parseHoraToMinutes(nextHora ?? "");
       let computedConc = "";
 
-      if (
-        currentHoraMinutes != null &&
-        previousHoraMinutes != null
-      ) {
+      if (currentHoraMinutes != null && previousHoraMinutes != null) {
         const rawDiff = currentHoraMinutes - previousHoraMinutes;
         computedConc = String(rawDiff >= 0 ? rawDiff : rawDiff + 24 * 60);
       }
@@ -583,7 +991,7 @@ export default function FTEditorPage() {
         },
       };
     });
-  }, [parsedSource, selectedTrainNumber, sourceRows]);
+  }, [selectedVariant, sourceRows]);
 
   const availableTrainNumbers = useMemo(() => {
     return Object.keys(parsedSource.trains ?? {}).sort((a, b) =>
@@ -633,88 +1041,107 @@ export default function FTEditorPage() {
     return horaireRows.slice(startIndex, endIndex + 1);
   }, [horaireRows, validatedOrigin, validatedDestination]);
 
-const handleValidateHoraireSelection = useCallback(() => {
-  const trimmedOrigin = selectedOrigin.trim();
-  const trimmedDestination = selectedDestination.trim();
+  const handleValidateHoraireSelection = useCallback(() => {
+    const trimmedOrigin = selectedOrigin.trim();
+    const trimmedDestination = selectedDestination.trim();
 
-  if (trimmedOrigin === "") {
-    setHoraireValidationError("Choisis une origine.");
-    return;
-  }
+    if (trimmedOrigin === "") {
+      setHoraireValidationError("Choisis une origine.");
+      return;
+    }
 
-  if (trimmedDestination === "") {
-    setHoraireValidationError("Choisis une destination.");
-    return;
-  }
+    if (trimmedDestination === "") {
+      setHoraireValidationError("Choisis une destination.");
+      return;
+    }
 
-  if (trimmedOrigin === trimmedDestination) {
-    setHoraireValidationError(
-      "L’origine et la destination doivent être différentes."
+    if (trimmedOrigin === trimmedDestination) {
+      setHoraireValidationError(
+        "L’origine et la destination doivent être différentes."
+      );
+      return;
+    }
+
+    const originIndex = horaireRows.findIndex(
+      (row) => row.visible.dependencia.trim() === trimmedOrigin
     );
-    return;
-  }
-
-  const originIndex = horaireRows.findIndex(
-    (row) => row.visible.dependencia.trim() === trimmedOrigin
-  );
-  const destinationIndex = horaireRows.findIndex(
-    (row) => row.visible.dependencia.trim() === trimmedDestination
-  );
-
-  if (originIndex === -1 || destinationIndex === -1) {
-    setHoraireValidationError(
-      "Origine ou destination introuvable dans le tableau actuel."
+    const destinationIndex = horaireRows.findIndex(
+      (row) => row.visible.dependencia.trim() === trimmedDestination
     );
-    return;
-  }
 
-  if (originIndex > destinationIndex) {
-    setHoraireValidationError(
-      "L’ordre origine / destination n’est pas cohérent avec le sens actuellement affiché."
-    );
-    return;
-  }
+    if (originIndex === -1 || destinationIndex === -1) {
+      setHoraireValidationError(
+        "Origine ou destination introuvable dans le tableau actuel."
+      );
+      return;
+    }
 
-  setValidatedOrigin(trimmedOrigin);
-  setValidatedDestination(trimmedDestination);
-  setHoraireValidationError(null);
+    if (originIndex > destinationIndex) {
+      setHoraireValidationError(
+        "L’ordre origine / destination n’est pas cohérent avec le sens actuellement affiché."
+      );
+      return;
+    }
 
-  if (selectedTrainNumber.trim() !== "") {
-    setHoraireSelectionsByTrain((previous) => ({
-      ...previous,
-      [selectedTrainNumber]: {
-        selectedOrigin: trimmedOrigin,
-        selectedDestination: trimmedDestination,
-        validatedOrigin: trimmedOrigin,
-        validatedDestination: trimmedDestination,
-      },
-    }));
+    setValidatedOrigin(trimmedOrigin);
+    setValidatedDestination(trimmedDestination);
+    setHoraireValidationError(null);
 
-    setParsedSource((previous) => {
-      const previousTrains = previous.trains ?? {};
-      const previousTrain = previousTrains[selectedTrainNumber];
-
-      if (!previousTrain) {
-        return previous;
-      }
-
-      return {
+    if (selectedTrainNumber.trim() !== "") {
+      setHoraireSelectionsByTrain((previous) => ({
         ...previous,
-        trains: {
-          ...previousTrains,
-          [selectedTrainNumber]: {
-            ...previousTrain,
-            meta: {
-              ...previousTrain.meta,
-              origine: trimmedOrigin,
-              destination: trimmedDestination,
-            },
-          },
+        [selectedTrainNumber]: {
+          selectedOrigin: trimmedOrigin,
+          selectedDestination: trimmedDestination,
+          validatedOrigin: trimmedOrigin,
+          validatedDestination: trimmedDestination,
         },
-      };
-    });
-  }
-}, [horaireRows, selectedDestination, selectedOrigin, selectedTrainNumber]);
+      }));
+
+      setParsedSource((previous) => {
+        const previousTrains = previous.trains ?? {};
+        const previousTrain = previousTrains[selectedTrainNumber];
+
+        if (!previousTrain) {
+          return previous;
+        }
+
+        const nextSelectedVariant = getVariantAtIndex(
+          previousTrain,
+          selectedVariantIndex
+        );
+
+        if (!nextSelectedVariant) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          trains: {
+            ...previousTrains,
+            [selectedTrainNumber]: replaceVariantAtIndex(
+              previousTrain,
+              selectedVariantIndex,
+              {
+                ...nextSelectedVariant,
+                meta: {
+                  ...nextSelectedVariant.meta,
+                  origine: trimmedOrigin,
+                  destination: trimmedDestination,
+                },
+              }
+            ),
+          },
+        };
+      });
+    }
+  }, [
+    horaireRows,
+    selectedDestination,
+    selectedOrigin,
+    selectedTrainNumber,
+    selectedVariantIndex,
+  ]);
 
   const hasUnpublishedChanges = useMemo(() => {
     return !areSourceTablesEqual(parsedSource, referenceData);
@@ -751,46 +1178,54 @@ const handleValidateHoraireSelection = useCallback(() => {
     );
   }, [selectedTrainNumber]);
 
-useEffect(() => {
-  if (selectedTrainNumber.trim() === "") {
+  useEffect(() => {
+    if (selectedTrainNumber.trim() === "") {
+      setSelectedOrigin("");
+      setSelectedDestination("");
+      setValidatedOrigin("");
+      setValidatedDestination("");
+      setHoraireValidationError(null);
+      return;
+    }
+
+    const savedSelection = horaireSelectionsByTrain[selectedTrainNumber];
+
+    if (savedSelection) {
+      setSelectedOrigin(savedSelection.selectedOrigin);
+      setSelectedDestination(savedSelection.selectedDestination);
+      setValidatedOrigin(savedSelection.validatedOrigin);
+      setValidatedDestination(savedSelection.validatedDestination);
+      setHoraireValidationError(null);
+      return;
+    }
+
+    const selectedVariant = getVariantAtIndex(
+      parsedSource.trains?.[selectedTrainNumber],
+      selectedVariantIndex
+    );
+    const metaOrigin = selectedVariant?.meta.origine?.trim() ?? "";
+    const metaDestination = selectedVariant?.meta.destination?.trim() ?? "";
+
+    if (metaOrigin !== "" && metaDestination !== "") {
+      setSelectedOrigin(metaOrigin);
+      setSelectedDestination(metaDestination);
+      setValidatedOrigin(metaOrigin);
+      setValidatedDestination(metaDestination);
+      setHoraireValidationError(null);
+      return;
+    }
+
     setSelectedOrigin("");
     setSelectedDestination("");
     setValidatedOrigin("");
     setValidatedDestination("");
     setHoraireValidationError(null);
-    return;
-  }
-
-  const savedSelection = horaireSelectionsByTrain[selectedTrainNumber];
-
-  if (savedSelection) {
-    setSelectedOrigin(savedSelection.selectedOrigin);
-    setSelectedDestination(savedSelection.selectedDestination);
-    setValidatedOrigin(savedSelection.validatedOrigin);
-    setValidatedDestination(savedSelection.validatedDestination);
-    setHoraireValidationError(null);
-    return;
-  }
-
-  const trainMeta = parsedSource.trains?.[selectedTrainNumber]?.meta;
-  const metaOrigin = trainMeta?.origine?.trim() ?? "";
-  const metaDestination = trainMeta?.destination?.trim() ?? "";
-
-  if (metaOrigin !== "" && metaDestination !== "") {
-    setSelectedOrigin(metaOrigin);
-    setSelectedDestination(metaDestination);
-    setValidatedOrigin(metaOrigin);
-    setValidatedDestination(metaDestination);
-    setHoraireValidationError(null);
-    return;
-  }
-
-  setSelectedOrigin("");
-  setSelectedDestination("");
-  setValidatedOrigin("");
-  setValidatedDestination("");
-  setHoraireValidationError(null);
-}, [horaireSelectionsByTrain, parsedSource, selectedTrainNumber]);
+  }, [
+    horaireSelectionsByTrain,
+    parsedSource,
+    selectedTrainNumber,
+    selectedVariantIndex,
+  ]);
 
   useEffect(() => {
     if (sourceRows.length === 0) {
@@ -806,6 +1241,63 @@ useEffect(() => {
       setSelectedRowId(sourceRows[0].id);
     }
   }, [sourceRows, selectedRowId]);
+
+  useEffect(() => {
+    const validity = selectedVariant?.meta.validity;
+    const nextTrainNumber = selectedTrainNumber;
+    const nextVariantIndex = selectedVariantIndex;
+    const nextStartDate = validity?.startDate ?? "";
+    const nextEndDate = validity?.endDate ?? "";
+    const nextDays = validity?.days ?? buildDefaultVariantValidity().days;
+
+    setVariantValidityDraft((previous) => {
+      if (
+        previous.trainNumber === nextTrainNumber &&
+        previous.variantIndex === nextVariantIndex &&
+        previous.startDate === nextStartDate &&
+        previous.endDate === nextEndDate &&
+        previous.days.monday === nextDays.monday &&
+        previous.days.tuesday === nextDays.tuesday &&
+        previous.days.wednesday === nextDays.wednesday &&
+        previous.days.thursday === nextDays.thursday &&
+        previous.days.friday === nextDays.friday &&
+        previous.days.saturday === nextDays.saturday &&
+        previous.days.sunday === nextDays.sunday
+      ) {
+        return previous;
+      }
+
+      return {
+        trainNumber: nextTrainNumber,
+        variantIndex: nextVariantIndex,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
+        days: {
+          monday: nextDays.monday,
+          tuesday: nextDays.tuesday,
+          wednesday: nextDays.wednesday,
+          thursday: nextDays.thursday,
+          friday: nextDays.friday,
+          saturday: nextDays.saturday,
+          sunday: nextDays.sunday,
+        },
+      };
+    });
+
+    setVariantValidityError(null);
+  }, [
+    selectedTrainNumber,
+    selectedVariantIndex,
+    selectedVariant?.meta.validity?.startDate,
+    selectedVariant?.meta.validity?.endDate,
+    selectedVariant?.meta.validity?.days?.monday,
+    selectedVariant?.meta.validity?.days?.tuesday,
+    selectedVariant?.meta.validity?.days?.wednesday,
+    selectedVariant?.meta.validity?.days?.thursday,
+    selectedVariant?.meta.validity?.days?.friday,
+    selectedVariant?.meta.validity?.days?.saturday,
+    selectedVariant?.meta.validity?.days?.sunday,
+  ]);
 
   const firstRowPreview = useMemo(() => {
     return getRowPreview(sourceRows[0]);
@@ -869,7 +1361,7 @@ useEffect(() => {
     );
   }, [sourceRows]);
 
-    const etcsOptions = useMemo(() => {
+  const etcsOptions = useMemo(() => {
     const values = sourceRows
       .map((row) => row.visible.etcs.trim())
       .filter((value) => value !== "");
@@ -1237,7 +1729,7 @@ useEffect(() => {
     [selectedRow]
   );
 
-    const handleApplyEtcs = useCallback(
+  const handleApplyEtcs = useCallback(
     (nextEtcs: string) => {
       if (!selectedRow) {
         return;
@@ -1276,7 +1768,8 @@ useEffect(() => {
     },
     [selectedRow]
   );
-    const handlePublishClick = useCallback(() => {
+
+  const handlePublishClick = useCallback(() => {
     if (!hasUnpublishedChanges || isPublishing) {
       return;
     }
@@ -1327,129 +1820,94 @@ useEffect(() => {
     setIsRestoreModalOpen(false);
   }, [isRestoreListLoading]);
 
-  const handleSelectArchive = useCallback(
-    async (archiveName: string) => {
-      if (isRestoreListLoading) {
-        return;
-      }
-
-      setRestoreErrorMessage(null);
-      setIsRestoreListLoading(true);
-
-      try {
-        const response = await fetchLigneFtArchive(archiveName);
-        const restoredData = response.archive.data as FtSourceDirectionTables;
-
-        setParsedSource(restoredData);
-        setExportStatus("success");
-        setExportMessage(
-          `Archive chargée localement : ${response.archive.name}. Cette version n’est pas encore remise en service tant qu’elle n’est pas republiée.`
-        );
-        setExportDiagnostics([
-          `Archive chargée : ${response.archive.name}`,
-          "Aucune publication automatique n’a été effectuée.",
-        ]);
-        setRestoreErrorMessage(null);
-        setIsRestoreModalOpen(false);
-      } catch (error) {
-        setRestoreErrorMessage(
-          error instanceof Error
-            ? `Chargement de l’archive échoué : ${error.message}`
-            : "Chargement de l’archive échoué : erreur inconnue."
-        );
-      } finally {
-        setIsRestoreListLoading(false);
-      }
-    },
-    []
-  );
-
-const handleConfirmPublish = useCallback(async () => {
-  if (isPublishing) {
-    return;
-  }
-
-  setIsPublishing(true);
-
-  try {
-    const materializedSource = materializeComputedConcForPublish(parsedSource);
-    const publishedSource = clearLocalPublishState(materializedSource);
-    const response = await publishLigneFtData(publishedSource);
-
-    setParsedSource(publishedSource);
-    setReferenceData(publishedSource);
-    setExportStatus("success");
-    setExportMessage(
-      `Publication réussie : fichier actif mis à jour dans LIM Editor et JSON actif publié aussi vers LIM2, archive créée ${response.diagnostic.archiveCreated.name}.`
-    );
-    setExportDiagnostics([
-      `Fichier TS publié dans LIM Editor : ${response.diagnostic.publishedPath}`,
-      `Fichier JSON publié dans LIM Editor : ${response.diagnostic.publishedJsonPath}`,
-      `Fichier JSON publié dans LIM2 : ${response.diagnostic.publishedLim2JsonPath}`,
-      `Archive créée : ${response.diagnostic.archiveCreated.path}`,
-      response.diagnostic.purgedArchives.length > 0
-        ? `Archives purgées : ${response.diagnostic.purgedArchives.join(", ")}`
-        : "Aucune archive à purger.",
-    ]);
-    setIsPublishDialogOpen(false);
-  } catch (error) {
-    setExportStatus("error");
-    setExportMessage(
-      error instanceof Error
-        ? `Publication échouée : ${error.message}`
-        : "Publication échouée : erreur inconnue."
-    );
-    setExportDiagnostics([
-      "La version en service n’a pas été remplacée par l’éditeur tant que la publication n’a pas abouti.",
-    ]);
-  } finally {
-    setIsPublishing(false);
-  }
-}, [isPublishing, parsedSource]);
-
-const handleCreateTrain = useCallback(() => {
-  setCreateTrainInput("");
-  setPendingLeadingZeroTrainNumber("");
-  setPendingDuplicateTrainNumber("");
-  setIsLeadingZeroConfirmOpen(false);
-  setIsDuplicateTrainConfirmOpen(false);
-  setLastDuplicateVariantDecision(null);
-  setIsCreateTrainModalOpen(true);
-}, []);
-
-const handleCancelCreateTrain = useCallback(() => {
-  setCreateTrainInput("");
-  setPendingLeadingZeroTrainNumber("");
-  setPendingDuplicateTrainNumber("");
-  setIsLeadingZeroConfirmOpen(false);
-  setIsDuplicateTrainConfirmOpen(false);
-  setLastDuplicateVariantDecision(null);
-  setIsCreateTrainModalOpen(false);
-}, []);
-
-const finalizeCreateTrain = useCallback(
-  (nextTrainNumber: string) => {
-    const existingTrain = parsedSource.trains?.[nextTrainNumber];
-
-    if (existingTrain != null) {
-      setPendingDuplicateTrainNumber(nextTrainNumber);
-      setIsDuplicateTrainConfirmOpen(true);
+  const handleSelectArchive = useCallback(async (archiveName: string) => {
+    if (isRestoreListLoading) {
       return;
     }
 
-    setParsedSource((previous) => {
-      const previousTrains = previous.trains ?? {};
+    setRestoreErrorMessage(null);
+    setIsRestoreListLoading(true);
 
-      return {
-        ...previous,
-        trains: {
-          ...previousTrains,
-          [nextTrainNumber]: buildEmptyLocalTrainData(),
-        },
-      };
-    });
+    try {
+      const response = await fetchLigneFtArchive(archiveName);
+      const restoredData = response.archive.data as FtSourceDirectionTables;
 
-    setSelectedTrainNumber(nextTrainNumber);
+      setParsedSource(restoredData);
+      setExportStatus("success");
+      setExportMessage(
+        `Archive chargée localement : ${response.archive.name}. Cette version n’est pas encore remise en service tant qu’elle n’est pas republiée.`
+      );
+      setExportDiagnostics([
+        `Archive chargée : ${response.archive.name}`,
+        "Aucune publication automatique n’a été effectuée.",
+      ]);
+      setRestoreErrorMessage(null);
+      setIsRestoreModalOpen(false);
+    } catch (error) {
+      setRestoreErrorMessage(
+        error instanceof Error
+          ? `Chargement de l’archive échoué : ${error.message}`
+          : "Chargement de l’archive échoué : erreur inconnue."
+      );
+    } finally {
+      setIsRestoreListLoading(false);
+    }
+  }, []);
+
+  const handleConfirmPublish = useCallback(async () => {
+    if (isPublishing) {
+      return;
+    }
+
+    setIsPublishing(true);
+
+    try {
+      const materializedSource = materializeComputedConcForPublish(parsedSource);
+      const publishedSource = buildPublishedSourceForPublish(materializedSource);
+      const response = await publishLigneFtData(publishedSource);
+
+      setParsedSource(publishedSource);
+      setReferenceData(publishedSource);
+      setExportStatus("success");
+      setExportMessage(
+        `Publication réussie : fichier actif mis à jour dans LIM Editor et JSON actif publié aussi vers LIM2, archive créée ${response.diagnostic.archiveCreated.name}.`
+      );
+      setExportDiagnostics([
+        `Fichier TS publié dans LIM Editor : ${response.diagnostic.publishedPath}`,
+        `Fichier JSON publié dans LIM Editor : ${response.diagnostic.publishedJsonPath}`,
+        `Fichier JSON publié dans LIM2 : ${response.diagnostic.publishedLim2JsonPath}`,
+        `Archive créée : ${response.diagnostic.archiveCreated.path}`,
+        response.diagnostic.purgedArchives.length > 0
+          ? `Archives purgées : ${response.diagnostic.purgedArchives.join(", ")}`
+          : "Aucune archive à purger.",
+      ]);
+      setIsPublishDialogOpen(false);
+    } catch (error) {
+      setExportStatus("error");
+      setExportMessage(
+        error instanceof Error
+          ? `Publication échouée : ${error.message}`
+          : "Publication échouée : erreur inconnue."
+      );
+      setExportDiagnostics([
+        "La version en service n’a pas été remplacée par l’éditeur tant que la publication n’a pas abouti.",
+      ]);
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [isPublishing, parsedSource]);
+
+  const handleCreateTrain = useCallback(() => {
+    setCreateTrainInput("");
+    setPendingLeadingZeroTrainNumber("");
+    setPendingDuplicateTrainNumber("");
+    setIsLeadingZeroConfirmOpen(false);
+    setIsDuplicateTrainConfirmOpen(false);
+    setLastDuplicateVariantDecision(null);
+    setIsCreateTrainModalOpen(true);
+  }, []);
+
+  const handleCancelCreateTrain = useCallback(() => {
     setCreateTrainInput("");
     setPendingLeadingZeroTrainNumber("");
     setPendingDuplicateTrainNumber("");
@@ -1457,173 +1915,493 @@ const finalizeCreateTrain = useCallback(
     setIsDuplicateTrainConfirmOpen(false);
     setLastDuplicateVariantDecision(null);
     setIsCreateTrainModalOpen(false);
-  },
-  [parsedSource.trains]
-);
+  }, []);
 
-const handleConfirmCreateTrain = useCallback(() => {
-  const nextTrainNumber = createTrainInput.trim();
+  const finalizeCreateTrain = useCallback(
+    (nextTrainNumber: string) => {
+      const existingTrain = parsedSource.trains?.[nextTrainNumber];
 
-  if (!isTrainNumberInputValid(nextTrainNumber)) {
-    return;
-  }
+      if (existingTrain != null) {
+        setPendingDuplicateTrainNumber(nextTrainNumber);
+        setIsDuplicateTrainConfirmOpen(true);
+        return;
+      }
 
-  if (hasLeadingZeros(nextTrainNumber)) {
-    setPendingLeadingZeroTrainNumber(nextTrainNumber);
-    setIsLeadingZeroConfirmOpen(true);
-    return;
-  }
+      setParsedSource((previous) => {
+        const previousTrains = previous.trains ?? {};
 
-  finalizeCreateTrain(nextTrainNumber);
-}, [createTrainInput, finalizeCreateTrain]);
+        return {
+          ...previous,
+          trains: {
+            ...previousTrains,
+            [nextTrainNumber]: buildEmptyLocalTrainData(),
+          },
+        };
+      });
 
-const handleKeepLeadingZeroTrainNumber = useCallback(() => {
-  const nextTrainNumber = pendingLeadingZeroTrainNumber.trim();
+      setSelectedTrainNumber(nextTrainNumber);
+      setCreateTrainInput("");
+      setPendingLeadingZeroTrainNumber("");
+      setPendingDuplicateTrainNumber("");
+      setIsLeadingZeroConfirmOpen(false);
+      setIsDuplicateTrainConfirmOpen(false);
+      setLastDuplicateVariantDecision(null);
+      setIsCreateTrainModalOpen(false);
+    },
+    [parsedSource.trains]
+  );
 
-  if (!isTrainNumberInputValid(nextTrainNumber)) {
-    return;
-  }
+  const handleConfirmCreateTrain = useCallback(() => {
+    const nextTrainNumber = createTrainInput.trim();
 
-  finalizeCreateTrain(nextTrainNumber);
-}, [finalizeCreateTrain, pendingLeadingZeroTrainNumber]);
-
-const handleRemoveLeadingZerosFromTrainNumber = useCallback(() => {
-  const nextTrainNumber = removeLeadingZeros(pendingLeadingZeroTrainNumber);
-
-  if (!isTrainNumberInputValid(nextTrainNumber)) {
-    return;
-  }
-
-  finalizeCreateTrain(nextTrainNumber);
-}, [finalizeCreateTrain, pendingLeadingZeroTrainNumber]);
-
-const handleCancelLeadingZeroConfirm = useCallback(() => {
-  setPendingLeadingZeroTrainNumber("");
-  setIsLeadingZeroConfirmOpen(false);
-}, []);
-
-const handleDuplicateVariantYes = useCallback(() => {
-  setLastDuplicateVariantDecision("yes");
-  setPendingDuplicateTrainNumber("");
-  setIsDuplicateTrainConfirmOpen(false);
-}, []);
-
-const handleDuplicateVariantNo = useCallback(() => {
-  setLastDuplicateVariantDecision("no");
-  setPendingDuplicateTrainNumber("");
-  setIsDuplicateTrainConfirmOpen(false);
-}, []);
-
-const handleOpenDeleteTrainConfirm = useCallback(() => {
-  if (selectedTrainNumber.trim() === "") {
-    return;
-  }
-
-  setIsDeleteTrainConfirmOpen(true);
-}, [selectedTrainNumber]);
-
-const handleCancelDeleteTrain = useCallback(() => {
-  setIsDeleteTrainConfirmOpen(false);
-}, []);
-
-const handleConfirmDeleteTrain = useCallback(() => {
-  const trainNumberToDelete = selectedTrainNumber.trim();
-
-  if (trainNumberToDelete === "") {
-    setIsDeleteTrainConfirmOpen(false);
-    return;
-  }
-
-  setParsedSource((previous) => {
-    const previousTrains = previous.trains ?? {};
-
-    if (!(trainNumberToDelete in previousTrains)) {
-      return previous;
-    }
-
-    const nextTrains = { ...previousTrains };
-    delete nextTrains[trainNumberToDelete];
-
-    return {
-      ...previous,
-      trains: nextTrains,
-    };
-  });
-
-  setHoraireSelectionsByTrain((previous) => {
-    if (!(trainNumberToDelete in previous)) {
-      return previous;
-    }
-
-    const nextSelections = { ...previous };
-    delete nextSelections[trainNumberToDelete];
-    return nextSelections;
-  });
-
-  setIsDeleteTrainConfirmOpen(false);
-}, [selectedTrainNumber]);
-
-const handleApplyComForSelectedTrain = useCallback(
-  (rowId: string, nextCom: string) => {
-    if (selectedTrainNumber.trim() === "") {
+    if (!isTrainNumberInputValid(nextTrainNumber)) {
       return;
     }
 
-    const trimmedCom = nextCom.trim();
-    const normalizedCom =
-      trimmedCom !== "" && /^[1-9]\d*$/.test(trimmedCom) ? trimmedCom : "";
+    if (hasLeadingZeros(nextTrainNumber)) {
+      setPendingLeadingZeroTrainNumber(nextTrainNumber);
+      setIsLeadingZeroConfirmOpen(true);
+      return;
+    }
+
+    finalizeCreateTrain(nextTrainNumber);
+  }, [createTrainInput, finalizeCreateTrain]);
+
+  const handleKeepLeadingZeroTrainNumber = useCallback(() => {
+    const nextTrainNumber = pendingLeadingZeroTrainNumber.trim();
+
+    if (!isTrainNumberInputValid(nextTrainNumber)) {
+      return;
+    }
+
+    finalizeCreateTrain(nextTrainNumber);
+  }, [finalizeCreateTrain, pendingLeadingZeroTrainNumber]);
+
+  const handleRemoveLeadingZerosFromTrainNumber = useCallback(() => {
+    const nextTrainNumber = removeLeadingZeros(pendingLeadingZeroTrainNumber);
+
+    if (!isTrainNumberInputValid(nextTrainNumber)) {
+      return;
+    }
+
+    finalizeCreateTrain(nextTrainNumber);
+  }, [finalizeCreateTrain, pendingLeadingZeroTrainNumber]);
+
+  const handleCancelLeadingZeroConfirm = useCallback(() => {
+    setPendingLeadingZeroTrainNumber("");
+    setIsLeadingZeroConfirmOpen(false);
+  }, []);
+
+  const handleDuplicateVariantYes = useCallback(() => {
+    const targetTrainNumber = pendingDuplicateTrainNumber.trim();
+
+    if (targetTrainNumber === "") {
+      setLastDuplicateVariantDecision("yes");
+      setPendingDuplicateTrainNumber("");
+      setIsDuplicateTrainConfirmOpen(false);
+      return;
+    }
 
     setParsedSource((previous) => {
       const previousTrains = previous.trains ?? {};
-      const previousTrain = previousTrains[selectedTrainNumber];
+      const previousTrain = previousTrains[targetTrainNumber];
 
       if (!previousTrain) {
         return previous;
       }
 
-      const previousRowData = previousTrain.byRowKey[rowId] ?? {};
-      const nextRowData: FtSourceTrainRowData = {
-        ...(previousRowData as FtSourceTrainRowData),
-      };
+      const sourceVariantIndex =
+        selectedVariantIndexByTrain[targetTrainNumber] ?? 0;
+      const sourceVariant = getVariantAtIndex(previousTrain, sourceVariantIndex);
 
-      if (normalizedCom === "") {
-        delete nextRowData.com;
-      } else {
-        nextRowData.com = normalizedCom;
+      if (!sourceVariant) {
+        return previous;
       }
 
-      const nextByRowKey = {
-        ...previousTrain.byRowKey,
+      const nextVariant: FtSourceTrainVariantData = {
+        meta: {
+          ...sourceVariant.meta,
+          validity: buildDefaultVariantValidity(),
+        },
+        byRowKey: {
+          ...sourceVariant.byRowKey,
+        },
       };
 
-      if (Object.keys(nextRowData).length === 0) {
-        delete nextByRowKey[rowId];
-      } else {
-        nextByRowKey[rowId] = nextRowData;
+      const existingVariants =
+        Array.isArray(previousTrain.variants) && previousTrain.variants.length > 0
+          ? previousTrain.variants
+          : [sourceVariant];
+
+      return {
+        ...previous,
+        trains: {
+          ...previousTrains,
+          [targetTrainNumber]: {
+            ...previousTrain,
+            publishState: "local",
+            variants: [...existingVariants, nextVariant],
+          },
+        },
+      };
+    });
+
+    setSelectedTrainNumber(targetTrainNumber);
+    setSelectedVariantIndexByTrain((previous) => {
+      const previousTrain = parsedSource.trains?.[targetTrainNumber];
+      const nextIndex = getVariantCount(previousTrain);
+
+      return {
+        ...previous,
+        [targetTrainNumber]: nextIndex,
+      };
+    });
+
+    setLastDuplicateVariantDecision("yes");
+    setCreateTrainInput("");
+    setPendingDuplicateTrainNumber("");
+    setIsDuplicateTrainConfirmOpen(false);
+    setIsCreateTrainModalOpen(false);
+  }, [pendingDuplicateTrainNumber, parsedSource.trains, selectedVariantIndexByTrain]);
+
+  const handleDuplicateVariantNo = useCallback(() => {
+    setLastDuplicateVariantDecision("no");
+    setPendingDuplicateTrainNumber("");
+    setIsDuplicateTrainConfirmOpen(false);
+  }, []);
+
+  const handleOpenDeleteTrainConfirm = useCallback(() => {
+    if (selectedTrainNumber.trim() === "") {
+      return;
+    }
+
+    setPendingVariantDeleteIndex(selectedVariantIndex);
+    setIsDeleteTrainConfirmOpen(true);
+  }, [selectedTrainNumber, selectedVariantIndex]);
+
+  const handleCancelDeleteTrain = useCallback(() => {
+    setPendingVariantDeleteIndex(null);
+    setIsDeleteTrainConfirmOpen(false);
+  }, []);
+
+  const handleConfirmDeleteTrain = useCallback(() => {
+    const trainNumberToDelete = selectedTrainNumber.trim();
+
+    if (trainNumberToDelete === "") {
+      setPendingVariantDeleteIndex(null);
+      setIsDeleteTrainConfirmOpen(false);
+      return;
+    }
+
+    const currentTrainData = parsedSource.trains?.[trainNumberToDelete];
+    const currentVariantCount = getVariantCount(currentTrainData);
+    const variantIndexToDelete = pendingVariantDeleteIndex ?? selectedVariantIndex;
+
+    setParsedSource((previous) => {
+      const previousTrains = previous.trains ?? {};
+      const previousTrain = previousTrains[trainNumberToDelete];
+
+      if (!previousTrain) {
+        return previous;
+      }
+
+      const previousVariantCount = getVariantCount(previousTrain);
+
+      if (previousVariantCount <= 1) {
+        const nextTrains = { ...previousTrains };
+        delete nextTrains[trainNumberToDelete];
+
+        return {
+          ...previous,
+          trains: nextTrains,
+        };
+      }
+
+      if (
+        !Array.isArray(previousTrain.variants) ||
+        previousTrain.variants.length === 0
+      ) {
+        return previous;
+      }
+
+      if (
+        variantIndexToDelete < 0 ||
+        variantIndexToDelete >= previousTrain.variants.length
+      ) {
+        return previous;
+      }
+
+      const nextVariants = previousTrain.variants.filter(
+        (_, index) => index !== variantIndexToDelete
+      );
+
+      return {
+        ...previous,
+        trains: {
+          ...previousTrains,
+          [trainNumberToDelete]: {
+            ...previousTrain,
+            publishState: "local",
+            variants: nextVariants,
+          },
+        },
+      };
+    });
+
+    if (currentVariantCount <= 1) {
+      setHoraireSelectionsByTrain((previous) => {
+        if (!(trainNumberToDelete in previous)) {
+          return previous;
+        }
+
+        const nextSelections = { ...previous };
+        delete nextSelections[trainNumberToDelete];
+        return nextSelections;
+      });
+
+      setSelectedVariantIndexByTrain((previous) => {
+        if (!(trainNumberToDelete in previous)) {
+          return previous;
+        }
+
+        const nextIndexes = { ...previous };
+        delete nextIndexes[trainNumberToDelete];
+        return nextIndexes;
+      });
+    } else {
+      setSelectedVariantIndexByTrain((previous) => {
+        const previousSelectedIndex = previous[trainNumberToDelete] ?? 0;
+        let nextSelectedIndex = previousSelectedIndex;
+
+        if (previousSelectedIndex > variantIndexToDelete) {
+          nextSelectedIndex = previousSelectedIndex - 1;
+        } else if (previousSelectedIndex === variantIndexToDelete) {
+          nextSelectedIndex = Math.min(
+            variantIndexToDelete,
+            currentVariantCount - 2
+          );
+        }
+
+        return {
+          ...previous,
+          [trainNumberToDelete]: nextSelectedIndex,
+        };
+      });
+    }
+
+    setPendingVariantDeleteIndex(null);
+    setIsDeleteTrainConfirmOpen(false);
+  }, [
+    parsedSource.trains,
+    pendingVariantDeleteIndex,
+    selectedTrainNumber,
+    selectedVariantIndex,
+  ]);
+
+  const handleAddVariantForSelectedTrain = useCallback(() => {
+    const targetTrainNumber = selectedTrainNumber.trim();
+
+    if (targetTrainNumber === "") {
+      return;
+    }
+
+    setParsedSource((previous) => {
+      const previousTrains = previous.trains ?? {};
+      const previousTrain = previousTrains[targetTrainNumber];
+
+      if (!previousTrain) {
+        return previous;
+      }
+
+      const sourceVariantIndex =
+        selectedVariantIndexByTrain[targetTrainNumber] ?? 0;
+      const sourceVariant = getVariantAtIndex(previousTrain, sourceVariantIndex);
+
+      if (!sourceVariant) {
+        return previous;
+      }
+
+      const nextVariant: FtSourceTrainVariantData = {
+        meta: {
+          ...sourceVariant.meta,
+          validity: buildDefaultVariantValidity(),
+        },
+        byRowKey: {
+          ...sourceVariant.byRowKey,
+        },
+      };
+
+      const existingVariants =
+        Array.isArray(previousTrain.variants) && previousTrain.variants.length > 0
+          ? previousTrain.variants
+          : [sourceVariant];
+
+      return {
+        ...previous,
+        trains: {
+          ...previousTrains,
+          [targetTrainNumber]: {
+            ...previousTrain,
+            publishState: "local",
+            variants: [...existingVariants, nextVariant],
+          },
+        },
+      };
+    });
+
+    setSelectedVariantIndexByTrain((previous) => {
+      const currentSelectedTrainData = parsedSource.trains?.[targetTrainNumber];
+      const nextIndex = getVariantCount(currentSelectedTrainData);
+
+      return {
+        ...previous,
+        [targetTrainNumber]: nextIndex,
+      };
+    });
+  }, [parsedSource.trains, selectedTrainNumber, selectedVariantIndexByTrain]);
+
+  const handleValidateVariantValidityDraft = useCallback(() => {
+    const targetTrainNumber = selectedTrainNumber.trim();
+
+    if (targetTrainNumber === "") {
+      return;
+    }
+
+    const trimmedStartDate = variantValidityDraft.startDate.trim();
+    const trimmedEndDate = variantValidityDraft.endDate.trim();
+    const selectedDayCount = getVariantActiveDayCount(variantValidityDraft.days);
+
+    if (selectedDayCount === 0) {
+      setVariantValidityError("Au moins un jour doit être sélectionné.");
+      return;
+    }
+
+    if (
+      trimmedStartDate !== "" &&
+      trimmedEndDate !== "" &&
+      trimmedEndDate < trimmedStartDate
+    ) {
+      setVariantValidityError(
+        "La date de fin ne peut pas être antérieure à la date de début."
+      );
+      return;
+    }
+
+    const currentTrainVariants =
+      Array.isArray(selectedTrainData?.variants) && selectedTrainData.variants.length > 0
+        ? selectedTrainData.variants
+        : selectedVariant != null
+          ? [selectedVariant]
+          : [];
+
+    const conflictingVariantIndex =
+      currentTrainVariants.length > 0
+        ? getConflictingVariantIndex(currentTrainVariants, selectedVariantIndex, {
+            startDate: trimmedStartDate,
+            endDate: trimmedEndDate,
+            days: {
+              monday: variantValidityDraft.days.monday,
+              tuesday: variantValidityDraft.days.tuesday,
+              wednesday: variantValidityDraft.days.wednesday,
+              thursday: variantValidityDraft.days.thursday,
+              friday: variantValidityDraft.days.friday,
+              saturday: variantValidityDraft.days.saturday,
+              sunday: variantValidityDraft.days.sunday,
+            },
+          })
+        : null;
+
+    if (conflictingVariantIndex != null) {
+      const conflictingVariant = currentTrainVariants[conflictingVariantIndex];
+      const conflictingDays = getOverlappingVariantDayLabels(
+        {
+          monday: variantValidityDraft.days.monday,
+          tuesday: variantValidityDraft.days.tuesday,
+          wednesday: variantValidityDraft.days.wednesday,
+          thursday: variantValidityDraft.days.thursday,
+          friday: variantValidityDraft.days.friday,
+          saturday: variantValidityDraft.days.saturday,
+          sunday: variantValidityDraft.days.sunday,
+        },
+        conflictingVariant.meta.validity.days
+      );
+
+      setVariantValidityError(
+        `Conflit interdit avec VARIANTE ${String.fromCharCode(
+          65 + conflictingVariantIndex
+        )} : chevauchement de périodes et chevauchement de jours ${conflictingDays.join(", ")}.`
+      );
+      return;
+    }
+
+    setVariantValidityError(null);
+
+    setParsedSource((previous) => {
+      const previousTrains = previous.trains ?? {};
+      const previousTrain = previousTrains[targetTrainNumber];
+
+      if (!previousTrain) {
+        return previous;
+      }
+
+      const currentVariant = getVariantAtIndex(previousTrain, selectedVariantIndex);
+
+      if (!currentVariant) {
+        return previous;
       }
 
       return {
         ...previous,
         trains: {
           ...previousTrains,
-          [selectedTrainNumber]: {
-            ...previousTrain,
-            byRowKey: nextByRowKey,
-          },
+          [targetTrainNumber]: replaceVariantAtIndex(
+            previousTrain,
+            selectedVariantIndex,
+            {
+              ...currentVariant,
+              meta: {
+                ...currentVariant.meta,
+                validity: {
+                  ...currentVariant.meta.validity,
+                  startDate: trimmedStartDate,
+                  endDate: trimmedEndDate,
+                  days: {
+                    monday: variantValidityDraft.days.monday,
+                    tuesday: variantValidityDraft.days.tuesday,
+                    wednesday: variantValidityDraft.days.wednesday,
+                    thursday: variantValidityDraft.days.thursday,
+                    friday: variantValidityDraft.days.friday,
+                    saturday: variantValidityDraft.days.saturday,
+                    sunday: variantValidityDraft.days.sunday,
+                  },
+                },
+              },
+            }
+          ),
         },
       };
     });
-  },
-  [selectedTrainNumber]
-);
 
-const handleApplyHoraForSelectedTrain = useCallback(
-    (rowId: string, nextHora: string) => {
+    setOpenVariantValidityEditor({
+      trainNumber: "",
+      variantIndex: -1,
+    });
+  }, [
+    selectedTrainData,
+    selectedTrainNumber,
+    selectedVariant,
+    selectedVariantIndex,
+    variantValidityDraft,
+  ]);
+
+  const updateSelectedTrainRowData = useCallback(
+    (
+      rowId: string,
+      updater: (nextRowData: FtSourceTrainRowData) => void
+    ) => {
       if (selectedTrainNumber.trim() === "") {
         return;
       }
-
-      const trimmedHora = nextHora.trim();
 
       setParsedSource((previous) => {
         const previousTrains = previous.trains ?? {};
@@ -1633,153 +2411,120 @@ const handleApplyHoraForSelectedTrain = useCallback(
           return previous;
         }
 
-        const previousRowData = previousTrain.byRowKey[rowId] ?? {};
+        const selectedVariant = getVariantAtIndex(
+          previousTrain,
+          selectedVariantIndex
+        );
+
+        if (!selectedVariant) {
+          return previous;
+        }
+
+        const previousRowData = selectedVariant.byRowKey[rowId] ?? {};
         const nextRowData: FtSourceTrainRowData = {
           ...(previousRowData as FtSourceTrainRowData),
         };
 
+        updater(nextRowData);
+
+        const nextByRowKey = {
+          ...selectedVariant.byRowKey,
+        };
+
+        if (Object.keys(nextRowData).length === 0) {
+          delete nextByRowKey[rowId];
+        } else {
+          nextByRowKey[rowId] = nextRowData;
+        }
+
+        return {
+          ...previous,
+          trains: {
+            ...previousTrains,
+            [selectedTrainNumber]: replaceVariantAtIndex(
+              previousTrain,
+              selectedVariantIndex,
+              {
+                ...selectedVariant,
+                byRowKey: nextByRowKey,
+              }
+            ),
+          },
+        };
+      });
+    },
+    [selectedTrainNumber, selectedVariantIndex]
+  );
+
+  const handleApplyComForSelectedTrain = useCallback(
+    (rowId: string, nextCom: string) => {
+      const trimmedCom = nextCom.trim();
+      const normalizedCom =
+        trimmedCom !== "" && /^[1-9]\d*$/.test(trimmedCom) ? trimmedCom : "";
+
+      updateSelectedTrainRowData(rowId, (nextRowData) => {
+        if (normalizedCom === "") {
+          delete nextRowData.com;
+        } else {
+          nextRowData.com = normalizedCom;
+        }
+      });
+    },
+    [updateSelectedTrainRowData]
+  );
+
+  const handleApplyHoraForSelectedTrain = useCallback(
+    (rowId: string, nextHora: string) => {
+      const trimmedHora = nextHora.trim();
+
+      updateSelectedTrainRowData(rowId, (nextRowData) => {
         if (trimmedHora === "") {
           delete nextRowData.hora;
         } else {
           nextRowData.hora = trimmedHora;
         }
-
-        const nextByRowKey = {
-          ...previousTrain.byRowKey,
-        };
-
-        if (Object.keys(nextRowData).length === 0) {
-          delete nextByRowKey[rowId];
-        } else {
-          nextByRowKey[rowId] = nextRowData;
-        }
-
-        return {
-          ...previous,
-          trains: {
-            ...previousTrains,
-            [selectedTrainNumber]: {
-              ...previousTrain,
-              byRowKey: nextByRowKey,
-            },
-          },
-        };
       });
     },
-    [selectedTrainNumber]
+    [updateSelectedTrainRowData]
   );
 
   const handleApplyTecnForSelectedTrain = useCallback(
     (rowId: string, nextTecn: string) => {
-      if (selectedTrainNumber.trim() === "") {
-        return;
-      }
-
       const trimmedTecn = nextTecn.trim();
       const normalizedTecn =
         trimmedTecn !== "" && /^[1-9]\d*$/.test(trimmedTecn) ? trimmedTecn : "";
 
-      setParsedSource((previous) => {
-        const previousTrains = previous.trains ?? {};
-        const previousTrain = previousTrains[selectedTrainNumber];
-
-        if (!previousTrain) {
-          return previous;
-        }
-
-        const previousRowData = previousTrain.byRowKey[rowId] ?? {};
-        const nextRowData: FtSourceTrainRowData = {
-          ...(previousRowData as FtSourceTrainRowData),
-        };
-
+      updateSelectedTrainRowData(rowId, (nextRowData) => {
         if (normalizedTecn === "") {
           delete nextRowData.tecn;
         } else {
           nextRowData.tecn = normalizedTecn;
         }
-
-        const nextByRowKey = {
-          ...previousTrain.byRowKey,
-        };
-
-        if (Object.keys(nextRowData).length === 0) {
-          delete nextByRowKey[rowId];
-        } else {
-          nextByRowKey[rowId] = nextRowData;
-        }
-
-        return {
-          ...previous,
-          trains: {
-            ...previousTrains,
-            [selectedTrainNumber]: {
-              ...previousTrain,
-              byRowKey: nextByRowKey,
-            },
-          },
-        };
       });
     },
-    [selectedTrainNumber]
+    [updateSelectedTrainRowData]
   );
 
   const handleApplyConcForSelectedTrain = useCallback(
     (rowId: string, nextConc: string) => {
-      if (selectedTrainNumber.trim() === "") {
-        return;
-      }
-
       const trimmedConc = nextConc.trim();
       const normalizedConc =
         trimmedConc !== "" && /^\d+$/.test(trimmedConc)
           ? String(Number(trimmedConc))
           : "";
 
-      setParsedSource((previous) => {
-        const previousTrains = previous.trains ?? {};
-        const previousTrain = previousTrains[selectedTrainNumber];
-
-        if (!previousTrain) {
-          return previous;
-        }
-
-        const previousRowData = previousTrain.byRowKey[rowId] ?? {};
-        const nextRowData: FtSourceTrainRowData = {
-          ...(previousRowData as FtSourceTrainRowData),
-        };
-
+      updateSelectedTrainRowData(rowId, (nextRowData) => {
         if (normalizedConc === "") {
           delete nextRowData.conc;
         } else {
           nextRowData.conc = normalizedConc;
         }
-
-        const nextByRowKey = {
-          ...previousTrain.byRowKey,
-        };
-
-        if (Object.keys(nextRowData).length === 0) {
-          delete nextByRowKey[rowId];
-        } else {
-          nextByRowKey[rowId] = nextRowData;
-        }
-
-        return {
-          ...previous,
-          trains: {
-            ...previousTrains,
-            [selectedTrainNumber]: {
-              ...previousTrain,
-              byRowKey: nextByRowKey,
-            },
-          },
-        };
       });
     },
-    [selectedTrainNumber]
+    [updateSelectedTrainRowData]
   );
 
-    const handleDeleteRows = useCallback((rowIds: string[]) => {
+  const handleDeleteRows = useCallback((rowIds: string[]) => {
     if (rowIds.length === 0) {
       return;
     }
@@ -1826,7 +2571,8 @@ const handleApplyHoraForSelectedTrain = useCallback(
         : previousSelectedRowId;
     });
   }, []);
-    const handleInsertRowAbove = useCallback((targetRowId: string) => {
+
+  const handleInsertRowAbove = useCallback((targetRowId: string) => {
     function extractRowNumberFromId(rowId: string): number {
       const match = rowId.match(/-(\d+)$/);
       return match ? Number(match[1]) : 0;
@@ -1887,10 +2633,7 @@ const handleApplyHoraForSelectedTrain = useCallback(
         if (targetType === "data" && targetIndex > 0) {
           const previousRawRow = currentTable.rows[targetIndex - 1];
 
-          if (
-            isRecord(previousRawRow) &&
-            previousRawRow["type"] === "note"
-          ) {
+          if (isRecord(previousRawRow) && previousRawRow["type"] === "note") {
             insertionIndex = targetIndex - 1;
           }
         }
@@ -1937,6 +2680,7 @@ const handleApplyHoraForSelectedTrain = useCallback(
       return previous;
     });
   }, []);
+
   const handleUpsertNote = useCallback(
     (targetRowId: string, noteLines: string[]) => {
       if (noteLines.length === 0) {
@@ -2094,6 +2838,7 @@ const handleApplyHoraForSelectedTrain = useCallback(
     },
     []
   );
+
   const handleDownloadNormalizedFile = useCallback(() => {
     const validation = validateNormalizedFtSource(parsedSource);
 
@@ -2207,7 +2952,10 @@ const handleApplyHoraForSelectedTrain = useCallback(
               value={createTrainInput}
               onChange={(event) => setCreateTrainInput(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && isTrainNumberInputValid(createTrainInput)) {
+                if (
+                  event.key === "Enter" &&
+                  isTrainNumberInputValid(createTrainInput)
+                ) {
                   event.preventDefault();
                   handleConfirmCreateTrain();
                 }
@@ -2227,7 +2975,8 @@ const handleApplyHoraForSelectedTrain = useCallback(
               }}
             />
 
-            {createTrainInput.trim() !== "" && !isTrainNumberInputValid(createTrainInput) ? (
+            {createTrainInput.trim() !== "" &&
+            !isTrainNumberInputValid(createTrainInput) ? (
               <div
                 style={{
                   marginBottom: 16,
@@ -2236,7 +2985,8 @@ const handleApplyHoraForSelectedTrain = useCallback(
                   fontWeight: 500,
                 }}
               >
-                Le numéro doit contenir uniquement des chiffres, avec une longueur de 1 à 6.
+                Le numéro doit contenir uniquement des chiffres, avec une
+                longueur de 1 à 6.
               </div>
             ) : (
               <div style={{ marginBottom: 16 }} />
@@ -2342,7 +3092,10 @@ const handleApplyHoraForSelectedTrain = useCallback(
               Vous avez saisi <strong>{pendingLeadingZeroTrainNumber}</strong>.
               <br />
               Souhaitez-vous conserver ce numéro ou le convertir en{" "}
-              <strong>{removeLeadingZeros(pendingLeadingZeroTrainNumber)}</strong> ?
+              <strong>
+                {removeLeadingZeros(pendingLeadingZeroTrainNumber)}
+              </strong>{" "}
+              ?
             </div>
 
             <div
@@ -2540,7 +3293,9 @@ const handleApplyHoraForSelectedTrain = useCallback(
                 color: "#111827",
               }}
             >
-              Supprimer un train
+              {selectedVariantCount <= 1
+                ? "Supprimer la dernière variante"
+                : "Supprimer une variante"}
             </div>
 
             <div
@@ -2550,8 +3305,25 @@ const handleApplyHoraForSelectedTrain = useCallback(
                 marginBottom: 20,
               }}
             >
-              Voulez-vous supprimer le train{" "}
-              <strong>{selectedTrainNumber || "?"}</strong> ?
+              {selectedVariantCount <= 1 ? (
+                <>
+                  Voulez-vous supprimer la dernière variante du train{" "}
+                  <strong>{selectedTrainNumber || "?"}</strong> ?
+                  <br />
+                  Cela supprimera aussi le train entier.
+                </>
+              ) : (
+                <>
+                  Voulez-vous supprimer{" "}
+                  <strong>
+                    VARIANTE{" "}
+                    {String.fromCharCode(
+                      65 + (pendingVariantDeleteIndex ?? selectedVariantIndex)
+                    )}
+                  </strong>{" "}
+                  du train <strong>{selectedTrainNumber || "?"}</strong> ?
+                </>
+              )}
             </div>
 
             <div
@@ -2599,423 +3371,95 @@ const handleApplyHoraForSelectedTrain = useCallback(
       ) : null}
 
       <EditorShell
-      toolbar={
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <DirectionSelector value={direction} onChange={setDirection} />
-
-          <button
-            type="button"
-            onClick={handleDownloadNormalizedFile}
-            disabled={sourceRows.length === 0}
-            style={{
-              padding: "10px 14px",
-              cursor: sourceRows.length === 0 ? "not-allowed" : "pointer",
-            }}
-            title="Télécharger le fichier ligneFT.normalized.ts généré depuis l’état actuel de l’éditeur"
-          >
-            Télécharger le normalisé
-          </button>
-
-          <PublishVersionButton
-            disabled={!hasUnpublishedChanges}
-            isBusy={isPublishing}
-            onClick={handlePublishClick}
-          />
-
-          <RestoreArchiveButton
-            disabled={false}
-            isBusy={isRestoreListLoading}
-            onClick={handleOpenRestoreModal}
-          />
-        </div>
-      }
-      tableArea={
-        <>
+        toolbar={
           <div
             style={{
               display: "flex",
-              gap: 8,
-              marginBottom: 16,
+              alignItems: "center",
+              gap: 12,
               flexWrap: "wrap",
             }}
           >
-            {[
-              { id: "FT" as const, label: "Tableau FT" },
-              { id: "HORAIRE" as const, label: "Tableau horaire" },
-              { id: "LTV" as const, label: "LTV" },
-            ].map((tab) => {
-              const isActive = activeTab === tab.id;
+            <DirectionSelector value={direction} onChange={setDirection} />
 
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    border: isActive ? "1px solid #2563eb" : "1px solid #d1d5db",
-                    background: isActive ? "#dbeafe" : "#ffffff",
-                    color: "#111827",
-                    fontWeight: isActive ? 700 : 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+            <button
+              type="button"
+              onClick={handleDownloadNormalizedFile}
+              disabled={sourceRows.length === 0}
+              style={{
+                padding: "10px 14px",
+                cursor: sourceRows.length === 0 ? "not-allowed" : "pointer",
+              }}
+              title="Télécharger le fichier ligneFT.normalized.ts généré depuis l’état actuel de l’éditeur"
+            >
+              Télécharger le normalisé
+            </button>
+
+            <PublishVersionButton
+              disabled={!hasUnpublishedChanges}
+              isBusy={isPublishing}
+              onClick={handlePublishClick}
+            />
+
+            <RestoreArchiveButton
+              disabled={false}
+              isBusy={isRestoreListLoading}
+              onClick={handleOpenRestoreModal}
+            />
           </div>
+        }
+        tableArea={
+          <>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginBottom: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              {[
+                { id: "FT" as const, label: "Tableau FT" },
+                { id: "HORAIRE" as const, label: "Tableau horaire" },
+                { id: "LTV" as const, label: "LTV" },
+              ].map((tab) => {
+                const isActive = activeTab === tab.id;
 
-          {activeTab === "FT" ? (
-            <>
-              <FTTable
-                directionLabel={directionLabel}
-                sourceStatus={sourceStatus}
-                remoteInfo={remoteInfo}
-                inspectionLines={inspectionLines}
-                sourceArrayName={sourceTableLabel}
-                rowCount={sourceRows.length}
-                firstRowPreview={firstRowPreview}
-                lastRowPreview={lastRowPreview}
-                rows={sourceRows}
-                selectedRowId={selectedRowId}
-                onRowSelect={(row) => {
-                  setSelectedRowId(row.id);
-                  setRequestedEditorField(null);
-                }}
-                onCellEditRequest={(row, field) => {
-                  setSelectedRowId(row.id);
-                  setRequestedEditorField(field);
-                }}
-                onDeleteRows={handleDeleteRows}
-                onUpsertNote={handleUpsertNote}
-                onInsertRowAbove={handleInsertRowAbove}
-              />
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: isActive
+                        ? "1px solid #2563eb"
+                        : "1px solid #d1d5db",
+                      background: isActive ? "#dbeafe" : "#ffffff",
+                      color: "#111827",
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
 
-              <EditorStatusBanner
-                title="Diagnostic export local"
-                message={
-                  hasUnpublishedChanges
-                    ? `${exportMessage} Modifications locales non publiées détectées.`
-                    : `${exportMessage} Aucune modification locale non publiée.`
-                }
-                tone={
-                  exportStatus === "success"
-                    ? "success"
-                    : exportStatus === "error"
-                      ? "error"
-                      : hasUnpublishedChanges
-                        ? "warning"
-                        : "neutral"
-                }
-                details={
-                  exportDiagnostics.length > 0
-                    ? exportDiagnostics
-                    : ["Aucun diagnostic d’export disponible pour l’instant."]
-                }
-              />
-            </>
-          ) : activeTab === "HORAIRE" ? (
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  marginBottom: 12,
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>Train sélectionné :</div>
-
-                <select
-                  value={selectedTrainNumber}
-                  onChange={(event) => setSelectedTrainNumber(event.target.value)}
-                  disabled={availableTrainNumbers.length === 0}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: isSelectedTrainUnpublished
-                      ? "1px solid #2563eb"
-                      : "1px solid #d1d5db",
-                    background: "#ffffff",
-                    color: isSelectedTrainUnpublished ? "#2563eb" : "#111827",
-                    fontWeight: isSelectedTrainUnpublished ? 700 : 500,
-                    minWidth: 120,
-                    cursor:
-                      availableTrainNumbers.length === 0
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
-                  {availableTrainNumbers.length === 0 ? (
-                    <option value="">Aucun train</option>
-                  ) : (
-                    availableTrainNumbers.map((trainNumber) => {
-                      const isUnpublished = unpublishedTrainNumbers.has(trainNumber);
-
-                      return (
-                        <option
-                          key={trainNumber}
-                          value={trainNumber}
-                          style={{
-                            color: isUnpublished ? "#2563eb" : "#111827",
-                            fontWeight: isUnpublished ? 700 : 400,
-                          }}
-                        >
-                          {trainNumber}
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-
-                <div style={{ fontWeight: 600 }}>Origine :</div>
-
-                <select
-                  value={selectedOrigin}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setSelectedOrigin(nextValue);
-
-                    if (selectedTrainNumber.trim() !== "") {
-                      setHoraireSelectionsByTrain((previous) => {
-                        const previousSelection = previous[selectedTrainNumber];
-                        const trainMeta =
-                          parsedSource.trains?.[selectedTrainNumber]?.meta;
-
-                        return {
-                          ...previous,
-                          [selectedTrainNumber]: {
-                            selectedOrigin: nextValue,
-                            selectedDestination:
-                              previousSelection?.selectedDestination ??
-                              trainMeta?.destination ??
-                              selectedDestination,
-                            validatedOrigin:
-                              previousSelection?.validatedOrigin ??
-                              trainMeta?.origine ??
-                              "",
-                            validatedDestination:
-                              previousSelection?.validatedDestination ??
-                              trainMeta?.destination ??
-                              "",
-                          },
-                        };
-                      });
-                    }
-                  }}
-                  disabled={horaireLocationOptions.length === 0}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #d1d5db",
-                    background: "#ffffff",
-                    minWidth: 180,
-                    cursor:
-                      horaireLocationOptions.length === 0
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
-                  <option value="">Choisir</option>
-                  {horaireLocationOptions.map((location) => (
-                    <option key={`origin-${location}`} value={location}>
-                      {location}
-                    </option>
-                  ))}
-                </select>
-
-                <div style={{ fontWeight: 600 }}>Destination :</div>
-
-                <select
-                  value={selectedDestination}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    setSelectedDestination(nextValue);
-
-                    if (selectedTrainNumber.trim() !== "") {
-                      setHoraireSelectionsByTrain((previous) => {
-                        const previousSelection = previous[selectedTrainNumber];
-                        const trainMeta =
-                          parsedSource.trains?.[selectedTrainNumber]?.meta;
-
-                        return {
-                          ...previous,
-                          [selectedTrainNumber]: {
-                            selectedOrigin:
-                              previousSelection?.selectedOrigin ??
-                              trainMeta?.origine ??
-                              selectedOrigin,
-                            selectedDestination: nextValue,
-                            validatedOrigin:
-                              previousSelection?.validatedOrigin ??
-                              trainMeta?.origine ??
-                              "",
-                            validatedDestination:
-                              previousSelection?.validatedDestination ??
-                              trainMeta?.destination ??
-                              "",
-                          },
-                        };
-                      });
-                    }
-                  }}
-                  disabled={horaireLocationOptions.length === 0}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #d1d5db",
-                    background: "#ffffff",
-                    minWidth: 180,
-                    cursor:
-                      horaireLocationOptions.length === 0
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
-                  <option value="">Choisir</option>
-                  {horaireLocationOptions.map((location) => (
-                    <option key={`destination-${location}`} value={location}>
-                      {location}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  type="button"
-                  onClick={handleValidateHoraireSelection}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    border: "1px solid #d1d5db",
-                    background: "#ffffff",
-                    color: "#111827",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Valider
-                </button>
-
-                <div
-                  style={{
-                    width: 1,
-                    height: 28,
-                    background: "#d1d5db",
-                    marginLeft: 4,
-                    marginRight: 4,
-                  }}
-                />
-
-                <button
-                  type="button"
-                  onClick={handleCreateTrain}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    border: "1px solid #2563eb",
-                    background: "#2563eb",
-                    color: "#ffffff",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Créer
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleOpenDeleteTrainConfirm}
-                  disabled={selectedTrainNumber.trim() === ""}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    border: "1px solid #dc2626",
-                    background:
-                      selectedTrainNumber.trim() === "" ? "#fca5a5" : "#dc2626",
-                    color: "#ffffff",
-                    fontWeight: 600,
-                    cursor:
-                      selectedTrainNumber.trim() === ""
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
-                  Supprimer
-                </button>
-              </div>
-
-              {horaireValidationError ? (
-                <div
-                  style={{
-                    marginBottom: 12,
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #fecaca",
-                    background: "#fef2f2",
-                    color: "#991b1b",
-                    fontWeight: 500,
-                  }}
-                >
-                  {horaireValidationError}
-                </div>
-              ) : null}
-
-              <div
-                style={{
-                  border: isSelectedTrainUnpublished
-                    ? "2px solid #93c5fd"
-                    : "2px solid transparent",
-                  borderRadius: 16,
-                  padding: isSelectedTrainUnpublished ? 8 : 0,
-                  background: "#ffffff",
-                  transition: "border-color 0.15s ease",
-                }}
-              >
+            {activeTab === "FT" ? (
+              <>
                 <FTTable
-                  title="Tableau horaire"
-                  titleBadge={
-                    isSelectedTrainUnpublished ? (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          padding: "4px 10px",
-                          borderRadius: 999,
-                          border: "1px solid #93c5fd",
-                          background: "#dbeafe",
-                          color: "#1d4ed8",
-                          fontWeight: 700,
-                          fontSize: 14,
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        En cours d’édition
-                      </span>
-                    ) : null
-                  }
                   directionLabel={directionLabel}
                   sourceStatus={sourceStatus}
                   remoteInfo={remoteInfo}
                   inspectionLines={inspectionLines}
                   sourceArrayName={sourceTableLabel}
-                  rowCount={displayedHoraireRows.length}
-                  firstRowPreview={getRowPreview(displayedHoraireRows[0])}
-                  lastRowPreview={getRowPreview(
-                    displayedHoraireRows[displayedHoraireRows.length - 1]
-                  )}
-                  rows={displayedHoraireRows}
-                  columns={HORAIRE_COLUMNS}
-                  dimHoraireColumns={false}
+                  rowCount={sourceRows.length}
+                  firstRowPreview={firstRowPreview}
+                  lastRowPreview={lastRowPreview}
+                  rows={sourceRows}
                   selectedRowId={selectedRowId}
                   onRowSelect={(row) => {
                     setSelectedRowId(row.id);
@@ -3025,75 +3469,852 @@ const handleApplyHoraForSelectedTrain = useCallback(
                     setSelectedRowId(row.id);
                     setRequestedEditorField(field);
                   }}
-                  onInlineComCommit={handleApplyComForSelectedTrain}
-                  onInlineHoraCommit={handleApplyHoraForSelectedTrain}
-                  onInlineTecnCommit={handleApplyTecnForSelectedTrain}
-                  onInlineConcCommit={handleApplyConcForSelectedTrain}
+                  onDeleteRows={handleDeleteRows}
+                  onUpsertNote={handleUpsertNote}
+                  onInsertRowAbove={handleInsertRowAbove}
                 />
+
+                <EditorStatusBanner
+                  title="Diagnostic export local"
+                  message={
+                    hasUnpublishedChanges
+                      ? `${exportMessage} Modifications locales non publiées détectées.`
+                      : `${exportMessage} Aucune modification locale non publiée.`
+                  }
+                  tone={
+                    exportStatus === "success"
+                      ? "success"
+                      : exportStatus === "error"
+                        ? "error"
+                        : hasUnpublishedChanges
+                          ? "warning"
+                          : "neutral"
+                  }
+                  details={
+                    exportDiagnostics.length > 0
+                      ? exportDiagnostics
+                      : ["Aucun diagnostic d’export disponible pour l’instant."]
+                  }
+                />
+              </>
+            ) : activeTab === "HORAIRE" ? (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>Train sélectionné :</div>
+
+                  <select
+                    value={selectedTrainNumber}
+                    onChange={(event) =>
+                      setSelectedTrainNumber(event.target.value)
+                    }
+                    disabled={availableTrainNumbers.length === 0}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: isSelectedTrainUnpublished
+                        ? "1px solid #2563eb"
+                        : "1px solid #d1d5db",
+                      background: "#ffffff",
+                      color: isSelectedTrainUnpublished ? "#2563eb" : "#111827",
+                      fontWeight: isSelectedTrainUnpublished ? 700 : 500,
+                      minWidth: 120,
+                      cursor:
+                        availableTrainNumbers.length === 0
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    {availableTrainNumbers.length === 0 ? (
+                      <option value="">Aucun train</option>
+                    ) : (
+                      availableTrainNumbers.map((trainNumber) => {
+                        const isUnpublished =
+                          unpublishedTrainNumbers.has(trainNumber);
+
+                        return (
+                          <option
+                            key={trainNumber}
+                            value={trainNumber}
+                            style={{
+                              color: isUnpublished ? "#2563eb" : "#111827",
+                              fontWeight: isUnpublished ? 700 : 400,
+                            }}
+                          >
+                            {trainNumber}
+                          </option>
+                        );
+                      })
+                    )}
+                  </select>
+
+                  <div style={{ fontWeight: 600 }}>Origine :</div>
+
+                  <select
+                    value={selectedOrigin}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setSelectedOrigin(nextValue);
+
+                      if (selectedTrainNumber.trim() !== "") {
+                        setHoraireSelectionsByTrain((previous) => {
+                          const previousSelection = previous[selectedTrainNumber];
+                          const selectedVariant = getVariantAtIndex(
+                            parsedSource.trains?.[selectedTrainNumber],
+                            selectedVariantIndex
+                          );
+                          const trainMeta = selectedVariant?.meta;
+
+                          return {
+                            ...previous,
+                            [selectedTrainNumber]: {
+                              selectedOrigin: nextValue,
+                              selectedDestination:
+                                previousSelection?.selectedDestination ??
+                                trainMeta?.destination ??
+                                selectedDestination,
+                              validatedOrigin:
+                                previousSelection?.validatedOrigin ??
+                                trainMeta?.origine ??
+                                "",
+                              validatedDestination:
+                                previousSelection?.validatedDestination ??
+                                trainMeta?.destination ??
+                                "",
+                            },
+                          };
+                        });
+                      }
+                    }}
+                    disabled={horaireLocationOptions.length === 0}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid #d1d5db",
+                      background: "#ffffff",
+                      minWidth: 180,
+                      cursor:
+                        horaireLocationOptions.length === 0
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    <option value="">Choisir</option>
+                    {horaireLocationOptions.map((location) => (
+                      <option key={`origin-${location}`} value={location}>
+                        {location}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div style={{ fontWeight: 600 }}>Destination :</div>
+
+                  <select
+                    value={selectedDestination}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setSelectedDestination(nextValue);
+
+                      if (selectedTrainNumber.trim() !== "") {
+                        setHoraireSelectionsByTrain((previous) => {
+                          const previousSelection = previous[selectedTrainNumber];
+                          const selectedVariant = getVariantAtIndex(
+                            parsedSource.trains?.[selectedTrainNumber],
+                            selectedVariantIndex
+                          );
+                          const trainMeta = selectedVariant?.meta;
+
+                          return {
+                            ...previous,
+                            [selectedTrainNumber]: {
+                              selectedOrigin:
+                                previousSelection?.selectedOrigin ??
+                                trainMeta?.origine ??
+                                selectedOrigin,
+                              selectedDestination: nextValue,
+                              validatedOrigin:
+                                previousSelection?.validatedOrigin ??
+                                trainMeta?.origine ??
+                                "",
+                              validatedDestination:
+                                previousSelection?.validatedDestination ??
+                                trainMeta?.destination ??
+                                "",
+                            },
+                          };
+                        });
+                      }
+                    }}
+                    disabled={horaireLocationOptions.length === 0}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid #d1d5db",
+                      background: "#ffffff",
+                      minWidth: 180,
+                      cursor:
+                        horaireLocationOptions.length === 0
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    <option value="">Choisir</option>
+                    {horaireLocationOptions.map((location) => (
+                      <option key={`destination-${location}`} value={location}>
+                        {location}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleValidateHoraireSelection}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: "1px solid #d1d5db",
+                      background: "#ffffff",
+                      color: "#111827",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Valider
+                  </button>
+
+                  <div
+                    style={{
+                      width: 1,
+                      height: 28,
+                      background: "#d1d5db",
+                      marginLeft: 4,
+                      marginRight: 4,
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleCreateTrain}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: "1px solid #2563eb",
+                      background: "#2563eb",
+                      color: "#ffffff",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Créer
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenDeleteTrainConfirm}
+                    disabled={selectedTrainNumber.trim() === ""}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: "1px solid #dc2626",
+                      background:
+                        selectedTrainNumber.trim() === ""
+                          ? "#fca5a5"
+                          : "#dc2626",
+                      color: "#ffffff",
+                      fontWeight: 600,
+                      cursor:
+                        selectedTrainNumber.trim() === ""
+                          ? "not-allowed"
+                          : "pointer",
+                    }}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+
+                {horaireValidationError ? (
+                  <div
+                    style={{
+                      marginBottom: 12,
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid #fecaca",
+                      background: "#fef2f2",
+                      color: "#991b1b",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {horaireValidationError}
+                  </div>
+                ) : null}
+
+                <div
+                  style={{
+                    border: isSelectedTrainUnpublished
+                      ? "2px solid #93c5fd"
+                      : "2px solid transparent",
+                    borderRadius: 16,
+                    padding: isSelectedTrainUnpublished ? 8 : 0,
+                    background: "#ffffff",
+                    transition: "border-color 0.15s ease",
+                  }}
+                >
+                  <FTTable
+                    title="Tableau horaire"
+                    titleBadge={
+                      isSelectedTrainUnpublished ? (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #93c5fd",
+                            background: "#dbeafe",
+                            color: "#1d4ed8",
+                            fontWeight: 700,
+                            fontSize: 14,
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          En cours d’édition
+                        </span>
+                      ) : null
+                    }
+                    directionLabel={directionLabel}
+                    sourceStatus={sourceStatus}
+                    remoteInfo={remoteInfo}
+                    inspectionLines={inspectionLines}
+                    sourceArrayName={sourceTableLabel}
+                    rowCount={displayedHoraireRows.length}
+                    firstRowPreview={getRowPreview(displayedHoraireRows[0])}
+                    lastRowPreview={getRowPreview(
+                      displayedHoraireRows[displayedHoraireRows.length - 1]
+                    )}
+                    rows={displayedHoraireRows}
+                    columns={HORAIRE_COLUMNS}
+                    dimHoraireColumns={false}
+                    selectedRowId={selectedRowId}
+                    onRowSelect={(row) => {
+                      setSelectedRowId(row.id);
+                      setRequestedEditorField(null);
+                    }}
+                    onCellEditRequest={(row, field) => {
+                      setSelectedRowId(row.id);
+                      setRequestedEditorField(field);
+                    }}
+                    onInlineComCommit={handleApplyComForSelectedTrain}
+                    onInlineHoraCommit={handleApplyHoraForSelectedTrain}
+                    onInlineTecnCommit={handleApplyTecnForSelectedTrain}
+                    onInlineConcCommit={handleApplyConcForSelectedTrain}
+                  />
+                </div>
+              </>
+            ) : (
+              <div
+                style={{
+                  padding: 24,
+                  border: "1px dashed #9ca3af",
+                  borderRadius: 16,
+                  background: "#ffffff",
+                  color: "#4b5563",
+                }}
+              >
+                <div
+                  style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}
+                >
+                  LTV
+                </div>
+                <div>Onglet créé. Contenu à venir.</div>
               </div>
-            </>
+            )}
+          </>
+        }
+        detailsPanel={
+          activeTab === "FT" ? (
+            <RowDetailsPanel
+              directionLabel={directionLabel}
+              sourceStatus={sourceStatus}
+              rowCount={sourceRows.length}
+              selectedRow={selectedRow}
+              requestedEditorField={requestedEditorField}
+              onRequestedEditorHandled={() => setRequestedEditorField(null)}
+              bloqueoOptions={bloqueoOptions}
+              onApplyBloqueo={handleApplyBloqueo}
+              vmaxOptions={vmaxOptions}
+              onApplyVmax={handleApplyVmax}
+              rcOptions={rcOptions}
+              onApplyRc={handleApplyRc}
+              radioOptions={radioOptions}
+              onApplyRadio={handleApplyRadio}
+              onApplyDependencia={handleApplyDependencia}
+              onApplyPkInternal={handleApplyPkInternal}
+              onApplyPkDisplay={handleApplyPkDisplay}
+              networkOptions={networkOptions}
+              onApplyNetwork={handleApplyNetwork}
+              onApplyCsv={handleApplyCsv}
+              etcsOptions={etcsOptions}
+              onApplyEtcs={handleApplyEtcs}
+            />
+          ) : activeTab === "HORAIRE" ? (
+            <div
+              style={{
+                padding: 20,
+                border: "1px solid #d1d5db",
+                borderRadius: 16,
+                background: "#ffffff",
+                color: "#111827",
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
+                Variantes
+              </div>
+
+              {selectedTrainNumber.trim() === "" ? (
+                <div style={{ color: "#4b5563" }}>
+                  Aucun train sélectionné.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {Array.from({ length: selectedVariantCount }, (_, index) => {
+                    const variant = getVariantAtIndex(selectedTrainData, index);
+                    const validity = variant?.meta.validity;
+                    const startDate = validity?.startDate?.trim() ?? "";
+                    const endDate = validity?.endDate?.trim() ?? "";
+                    const days = validity?.days;
+
+                    const dayLabels = [
+                      { key: "monday", label: "L" },
+                      { key: "tuesday", label: "M" },
+                      { key: "wednesday", label: "M" },
+                      { key: "thursday", label: "J" },
+                      { key: "friday", label: "V" },
+                      { key: "saturday", label: "S" },
+                      { key: "sunday", label: "D" },
+                    ] as const;
+
+                    return (
+                      <div
+                        key={`variant-${index}`}
+                        onClick={() => {
+                          if (selectedTrainNumber.trim() === "") {
+                            return;
+                          }
+
+                          setSelectedVariantIndexByTrain((previous) => ({
+                            ...previous,
+                            [selectedTrainNumber]: index,
+                          }));
+                        }}
+                        style={{
+                          display: "block",
+                          padding: 12,
+                          border:
+                            selectedVariantIndex === index
+                              ? "2px solid #2563eb"
+                              : "1px solid #d1d5db",
+                          borderRadius: 12,
+                          background:
+                            selectedVariantIndex === index ? "#eff6ff" : "#ffffff",
+                          cursor: "pointer",
+                          position: "relative",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setPendingVariantDeleteIndex(index);
+                            setIsDeleteTrainConfirmOpen(true);
+                          }}
+                          title={`Supprimer VARIANTE ${String.fromCharCode(65 + index)}`}
+                          style={{
+                            position: "absolute",
+                            top: 8,
+                            right: 8,
+                            width: 24,
+                            height: 24,
+                            borderRadius: 999,
+                            border: "1px solid #fecaca",
+                            background: "#fef2f2",
+                            color: "#dc2626",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            lineHeight: 1,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          ×
+                        </button>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            <div style={{ fontWeight: 700 }}>
+                              VARIANTE {String.fromCharCode(65 + index)}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+
+                                if (selectedVariantIndex !== index) {
+                                  setSelectedVariantIndexByTrain((previous) => ({
+                                    ...previous,
+                                    [selectedTrainNumber]: index,
+                                  }));
+                                  return;
+                                }
+
+                                setOpenVariantValidityEditor({
+                                  trainNumber: selectedTrainNumber,
+                                  variantIndex: index,
+                                });
+                              }}
+                              style={{
+                                padding: 0,
+                                border: "none",
+                                background: "transparent",
+                                color: "#374151",
+                                fontSize: 14,
+                                textAlign: "left",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Début : {formatVariantDateForDisplay(startDate)}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+
+                                if (selectedVariantIndex !== index) {
+                                  setSelectedVariantIndexByTrain((previous) => ({
+                                    ...previous,
+                                    [selectedTrainNumber]: index,
+                                  }));
+                                  return;
+                                }
+
+                                setOpenVariantValidityEditor({
+                                  trainNumber: selectedTrainNumber,
+                                  variantIndex: index,
+                                });
+                              }}
+                              style={{
+                                padding: 0,
+                                border: "none",
+                                background: "transparent",
+                                color: "#374151",
+                                fontSize: 14,
+                                textAlign: "left",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Fin : {formatVariantDateForDisplay(endDate)}
+                            </button>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 4,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              {dayLabels.map((day) => {
+                                const isActive = days?.[day.key] ?? true;
+
+                                return (
+                                  <button
+                                    key={day.key}
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+
+                                      if (selectedVariantIndex !== index) {
+                                        setSelectedVariantIndexByTrain((previous) => ({
+                                          ...previous,
+                                          [selectedTrainNumber]: index,
+                                        }));
+                                        return;
+                                      }
+
+                                      setOpenVariantValidityEditor({
+                                        trainNumber: selectedTrainNumber,
+                                        variantIndex: index,
+                                      });
+                                    }}
+                                    style={{
+                                      minWidth: 22,
+                                      height: 22,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      borderRadius: 999,
+                                      border: isActive
+                                        ? "1px solid #2563eb"
+                                        : "1px solid #d1d5db",
+                                      background: isActive ? "#dbeafe" : "#f9fafb",
+                                      color: isActive ? "#1d4ed8" : "#9ca3af",
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                      padding: 0,
+                                    }}
+                                  >
+                                    {day.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {selectedVariantIndex === index &&
+                            openVariantValidityEditor.trainNumber ===
+                              selectedTrainNumber &&
+                            openVariantValidityEditor.variantIndex === index ? (
+                              <div
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                }}
+                                style={{
+                                  marginTop: 4,
+                                  paddingTop: 12,
+                                  borderTop: "1px solid #bfdbfe",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 10,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: "#1e3a8a",
+                                  }}
+                                >
+                                  Validité
+                                </div>
+
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 6,
+                                    fontSize: 13,
+                                    color: "#374151",
+                                  }}
+                                >
+                                  <span>Début</span>
+                                  <input
+                                    type="date"
+                                    value={
+                                      variantValidityDraft.trainNumber ===
+                                        selectedTrainNumber &&
+                                      variantValidityDraft.variantIndex === index
+                                        ? variantValidityDraft.startDate
+                                        : ""
+                                    }
+                                    onChange={(event) =>
+                                      setVariantValidityDraft((previous) => ({
+                                        ...previous,
+                                        startDate: event.target.value,
+                                      }))
+                                    }
+                                    style={{
+                                      padding: "8px 10px",
+                                      borderRadius: 10,
+                                      border: "1px solid #d1d5db",
+                                      background: "#ffffff",
+                                      color: "#111827",
+                                    }}
+                                  />
+                                </label>
+
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 6,
+                                    fontSize: 13,
+                                    color: "#374151",
+                                  }}
+                                >
+                                  <span>Fin</span>
+                                  <input
+                                    type="date"
+                                    value={
+                                      variantValidityDraft.trainNumber ===
+                                        selectedTrainNumber &&
+                                      variantValidityDraft.variantIndex === index
+                                        ? variantValidityDraft.endDate
+                                        : ""
+                                    }
+                                    onChange={(event) =>
+                                      setVariantValidityDraft((previous) => ({
+                                        ...previous,
+                                        endDate: event.target.value,
+                                      }))
+                                    }
+                                    style={{
+                                      padding: "8px 10px",
+                                      borderRadius: 10,
+                                      border: "1px solid #d1d5db",
+                                      background: "#ffffff",
+                                      color: "#111827",
+                                    }}
+                                  />
+                                </label>
+
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 6,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  {dayLabels.map((day) => {
+                                    const isDraftActive =
+                                      variantValidityDraft.trainNumber ===
+                                        selectedTrainNumber &&
+                                      variantValidityDraft.variantIndex === index
+                                        ? variantValidityDraft.days[day.key]
+                                        : false;
+
+                                    return (
+                                      <button
+                                        key={`draft-${day.key}`}
+                                        type="button"
+                                        onClick={() => {
+                                          setVariantValidityError(null);
+                                          setVariantValidityDraft((previous) => ({
+                                            ...previous,
+                                            days: {
+                                              ...previous.days,
+                                              [day.key]: !previous.days[day.key],
+                                            },
+                                          }));
+                                        }}
+                                        style={{
+                                          minWidth: 28,
+                                          height: 28,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          borderRadius: 999,
+                                          border: isDraftActive
+                                            ? "1px solid #2563eb"
+                                            : "1px solid #d1d5db",
+                                          background: isDraftActive
+                                            ? "#dbeafe"
+                                            : "#f9fafb",
+                                          color: isDraftActive
+                                            ? "#1d4ed8"
+                                            : "#9ca3af",
+                                          fontSize: 12,
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          padding: 0,
+                                        }}
+                                      >
+                                        {day.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {variantValidityError ? (
+                                  <div
+                                    style={{
+                                      padding: "8px 10px",
+                                      borderRadius: 10,
+                                      border: "1px solid #fecaca",
+                                      background: "#fef2f2",
+                                      color: "#991b1b",
+                                      fontSize: 13,
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    {variantValidityError}
+                                  </div>
+                                ) : null}
+
+                                <button
+                                  type="button"
+                                  onClick={handleValidateVariantValidityDraft}
+                                  style={{
+                                    alignSelf: "flex-start",
+                                    padding: "8px 12px",
+                                    borderRadius: 10,
+                                    border: "1px solid #2563eb",
+                                    background: "#2563eb",
+                                    color: "#ffffff",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Valider
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={handleAddVariantForSelectedTrain}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid #2563eb",
+                      background: "#ffffff",
+                      color: "#2563eb",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Ajouter une variante
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <div
               style={{
-                padding: 24,
-                border: "1px dashed #9ca3af",
+                padding: 20,
+                border: "1px dashed #d1d5db",
                 borderRadius: 16,
-                background: "#ffffff",
                 color: "#4b5563",
               }}
             >
-              <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>
-                LTV
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+                Panneau latéral
               </div>
-              <div>Onglet créé. Contenu à venir.</div>
+              <div>Aucun panneau spécifique pour cet onglet pour le moment.</div>
             </div>
-          )}
-        </>
-      }
-      detailsPanel={
-        activeTab === "FT" ? (
-          <RowDetailsPanel
-            directionLabel={directionLabel}
-            sourceStatus={sourceStatus}
-            rowCount={sourceRows.length}
-            selectedRow={selectedRow}
-            requestedEditorField={requestedEditorField}
-            onRequestedEditorHandled={() => setRequestedEditorField(null)}
-            bloqueoOptions={bloqueoOptions}
-            onApplyBloqueo={handleApplyBloqueo}
-            vmaxOptions={vmaxOptions}
-            onApplyVmax={handleApplyVmax}
-            rcOptions={rcOptions}
-            onApplyRc={handleApplyRc}
-            radioOptions={radioOptions}
-            onApplyRadio={handleApplyRadio}
-            onApplyDependencia={handleApplyDependencia}
-            onApplyPkInternal={handleApplyPkInternal}
-            onApplyPkDisplay={handleApplyPkDisplay}
-            networkOptions={networkOptions}
-            onApplyNetwork={handleApplyNetwork}
-            onApplyCsv={handleApplyCsv}
-            etcsOptions={etcsOptions}
-            onApplyEtcs={handleApplyEtcs}
-          />
-        ) : (
-          <div
-            style={{
-              padding: 20,
-              border: "1px dashed #d1d5db",
-              borderRadius: 16,
-              color: "#4b5563",
-            }}
-          >
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
-              Panneau latéral
-            </div>
-            <div>
-              Aucun panneau spécifique pour cet onglet pour le moment.
-            </div>
-          </div>
-        )
-      }
+          )
+        }
       />
     </>
   );

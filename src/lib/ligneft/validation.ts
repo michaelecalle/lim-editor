@@ -95,6 +95,158 @@ function validateRows(rows: unknown, path: string): string[] {
   return errors;
 }
 
+function validateVariantDays(days: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(days)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  for (const dayName of [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ] as const) {
+    if (typeof days[dayName] !== "boolean") {
+      errors.push(`${path}.${dayName} must be a boolean`);
+    }
+  }
+
+  return errors;
+}
+
+function validateVariantValidity(validity: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(validity)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  if (typeof validity.startDate !== "string") {
+    errors.push(`${path}.startDate must be a string`);
+  }
+
+  if (typeof validity.endDate !== "string") {
+    errors.push(`${path}.endDate must be a string`);
+  }
+
+  errors.push(...validateVariantDays(validity.days, `${path}.days`));
+
+  return errors;
+}
+
+function validateTrainRowData(rowData: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(rowData)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  for (const fieldName of ["com", "hora", "tecn", "conc"] as const) {
+    const fieldValue = rowData[fieldName];
+
+    if (fieldValue != null && typeof fieldValue !== "string") {
+      errors.push(`${path}.${fieldName} must be a string when present`);
+    }
+  }
+
+  return errors;
+}
+
+function validateVariantByRowKey(byRowKey: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(byRowKey)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  for (const [rowKey, rowData] of Object.entries(byRowKey)) {
+    errors.push(...validateTrainRowData(rowData, `${path}.${rowKey}`));
+  }
+
+  return errors;
+}
+
+function validateTrainVariant(variant: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(variant)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  const meta = variant.meta;
+  const byRowKey = variant.byRowKey;
+
+  if (!isObject(meta)) {
+    errors.push(`${path}.meta must be an object`);
+  } else {
+    if (typeof meta.origine !== "string") {
+      errors.push(`${path}.meta.origine must be a string`);
+    }
+
+    if (typeof meta.destination !== "string") {
+      errors.push(`${path}.meta.destination must be a string`);
+    }
+
+    errors.push(...validateVariantValidity(meta.validity, `${path}.meta.validity`));
+  }
+
+  errors.push(...validateVariantByRowKey(byRowKey, `${path}.byRowKey`));
+
+  return errors;
+}
+
+function validateTrainData(trainData: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(trainData)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  if (!Array.isArray(trainData.variants)) {
+    errors.push(`${path}.variants must be an array`);
+  } else {
+    trainData.variants.forEach((variant, index) => {
+      errors.push(...validateTrainVariant(variant, `${path}.variants[${index}]`));
+    });
+  }
+
+  if (
+    trainData.publishState != null &&
+    trainData.publishState !== "published" &&
+    trainData.publishState !== "local"
+  ) {
+    errors.push(`${path}.publishState must be "published" or "local" when present`);
+  }
+
+  return errors;
+}
+
+function validateTrains(trains: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(trains)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  for (const [trainNumber, trainData] of Object.entries(trains)) {
+    errors.push(...validateTrainData(trainData, `${path}.${trainNumber}`));
+  }
+
+  return errors;
+}
+
 export function validateNormalizedData(data: unknown): string[] {
   const errors: string[] = [];
 
@@ -112,6 +264,10 @@ export function validateNormalizedData(data: unknown): string[] {
     errors.push(`data.sudNord must be an object`);
   } else {
     errors.push(...validateRows(data.sudNord.rows, "data.sudNord.rows"));
+  }
+
+  if ("trains" in data && data.trains != null) {
+    errors.push(...validateTrains(data.trains, "data.trains"));
   }
 
   return errors;
