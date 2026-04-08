@@ -293,53 +293,7 @@ function validateTrainData(trainData: unknown, path: string): string[] {
 
   return errors;
 }
-  const errors: string[] = [];
 
-  if (!isObject(trainData)) {
-    errors.push(`${path} must be an object`);
-    return errors;
-  }
-
-  if (!isObject(trainData.meta)) {
-    errors.push(`${path}.meta must be an object`);
-  } else {
-    if (typeof trainData.meta.origine !== "string") {
-      errors.push(`${path}.meta.origine must be a string`);
-    }
-
-    if (typeof trainData.meta.destination !== "string") {
-      errors.push(`${path}.meta.destination must be a string`);
-    }
-  }
-
-  if (!isObject(trainData.byRowKey)) {
-    errors.push(`${path}.byRowKey must be an object`);
-  } else {
-    for (const [rowKey, rowData] of Object.entries(trainData.byRowKey)) {
-      errors.push(...validateTrainRowData(rowData, `${path}.byRowKey.${rowKey}`));
-    }
-  }
-
-  if (trainData.variants != null) {
-    if (!Array.isArray(trainData.variants)) {
-      errors.push(`${path}.variants must be an array when present`);
-    } else {
-      trainData.variants.forEach((variant, index) => {
-        errors.push(...validateTrainVariant(variant, `${path}.variants[${index}]`));
-      });
-    }
-  }
-
-  if (
-    trainData.publishState != null &&
-    trainData.publishState !== "published" &&
-    trainData.publishState !== "local"
-  ) {
-    errors.push(`${path}.publishState must be "published" or "local" when present`);
-  }
-
-  return errors;
-}
 
 function validateTrains(trains: unknown, path: string): string[] {
   const errors: string[] = [];
