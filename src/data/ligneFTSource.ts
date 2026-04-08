@@ -134,15 +134,115 @@ function sanitizePublishedTrains(
     return undefined;
   }
 
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  function asString(value: unknown): string {
+    return typeof value === "string" ? value : "";
+  }
+
+  function buildSanitizedMeta(meta: unknown) {
+    const record: Record<string, unknown> = isRecord(meta) ? meta : {};
+
+    return {
+      origine: asString(record["origine"]),
+      destination: asString(record["destination"]),
+      numeroEspagne: asString(record["numeroEspagne"]),
+      numeroFrance: asString(record["numeroFrance"]),
+      categorieEspagne: asString(record["categorieEspagne"]),
+      categorieFrance: asString(record["categorieFrance"]),
+      composition: asString(record["composition"]),
+    };
+  }
+
+  function buildSanitizedValidity(validity: unknown) {
+    const record: Record<string, unknown> = isRecord(validity) ? validity : {};
+    const days: Record<string, unknown> = isRecord(record["days"])
+      ? (record["days"] as Record<string, unknown>)
+      : {};
+
+    return {
+      startDate: asString(record["startDate"]),
+      endDate: asString(record["endDate"]),
+      days: {
+        monday: typeof days["monday"] === "boolean" ? days["monday"] : true,
+        tuesday: typeof days["tuesday"] === "boolean" ? days["tuesday"] : true,
+        wednesday: typeof days["wednesday"] === "boolean" ? days["wednesday"] : true,
+        thursday: typeof days["thursday"] === "boolean" ? days["thursday"] : true,
+        friday: typeof days["friday"] === "boolean" ? days["friday"] : true,
+        saturday: typeof days["saturday"] === "boolean" ? days["saturday"] : true,
+        sunday: typeof days["sunday"] === "boolean" ? days["sunday"] : true,
+      },
+    };
+  }
+
   const nextTrains: NonNullable<FtSourceDirectionTables["trains"]> = {};
 
   for (const [trainNumber, trainData] of Object.entries(trains)) {
+    const record: Record<string, unknown> = isRecord(trainData) ? trainData : {};
+    const rawVariants = record["variants"];
+
+    if (Array.isArray(rawVariants) && rawVariants.length > 0) {
+      nextTrains[trainNumber] = {
+        variants: rawVariants.map((variant) => {
+          const variantRecord: Record<string, unknown> = isRecord(variant)
+            ? variant
+            : {};
+          const meta: Record<string, unknown> = isRecord(variantRecord["meta"])
+            ? (variantRecord["meta"] as Record<string, unknown>)
+            : {};
+          const rawByRowKey: Record<string, unknown> = isRecord(
+            variantRecord["byRowKey"]
+          )
+            ? (variantRecord["byRowKey"] as Record<string, unknown>)
+            : {};
+
+          return {
+            meta: {
+              ...buildSanitizedMeta(meta),
+              validity: buildSanitizedValidity(meta["validity"]),
+            },
+            byRowKey:
+              rawByRowKey as Record<
+                string,
+                import("../modules/ft-editor/types/sourceTypes").FtSourceTrainRowData
+              >,
+          };
+        }),
+      };
+
+      continue;
+    }
+
     const { publishState: _publishState, ...restTrainData } =
       trainData as FtSourceTrainData & {
         publishState?: unknown;
       };
 
-    nextTrains[trainNumber] = restTrainData;
+    const legacyRecord: Record<string, unknown> = isRecord(restTrainData)
+      ? restTrainData
+      : {};
+    const meta = buildSanitizedMeta(legacyRecord["meta"]);
+    const rawByRowKey: Record<string, unknown> = isRecord(legacyRecord["byRowKey"])
+      ? (legacyRecord["byRowKey"] as Record<string, unknown>)
+      : {};
+
+    nextTrains[trainNumber] = {
+      variants: [
+        {
+          meta: {
+            ...meta,
+            validity: buildSanitizedValidity(undefined),
+          },
+          byRowKey:
+            rawByRowKey as Record<
+              string,
+              import("../modules/ft-editor/types/sourceTypes").FtSourceTrainRowData
+            >,
+        },
+      ],
+    };
   }
 
   return nextTrains;
@@ -279,13 +379,10 @@ export function buildNormalizedFtSourceFileContent(
       days: {
         monday: typeof days["monday"] === "boolean" ? days["monday"] : true,
         tuesday: typeof days["tuesday"] === "boolean" ? days["tuesday"] : true,
-        wednesday:
-          typeof days["wednesday"] === "boolean" ? days["wednesday"] : true,
-        thursday:
-          typeof days["thursday"] === "boolean" ? days["thursday"] : true,
+        wednesday: typeof days["wednesday"] === "boolean" ? days["wednesday"] : true,
+        thursday: typeof days["thursday"] === "boolean" ? days["thursday"] : true,
         friday: typeof days["friday"] === "boolean" ? days["friday"] : true,
-        saturday:
-          typeof days["saturday"] === "boolean" ? days["saturday"] : true,
+        saturday: typeof days["saturday"] === "boolean" ? days["saturday"] : true,
         sunday: typeof days["sunday"] === "boolean" ? days["sunday"] : true,
       },
     };
@@ -305,7 +402,7 @@ export function buildNormalizedFtSourceFileContent(
     };
   }
 
-  const normalized: LigneFTNormalized = {
+  const normalized: Record<string, unknown> = {
     nordSud: {
       rows: Array.isArray(source.nordSud?.rows) ? source.nordSud.rows : [],
     },
@@ -315,10 +412,12 @@ export function buildNormalizedFtSourceFileContent(
   };
 
   if (source.trains && typeof source.trains === "object") {
-    const nextTrains: NonNullable<LigneFTNormalized["trains"]> = {};
+    const nextTrains: Record<string, unknown> = {};
 
     for (const [trainNumber, trainData] of Object.entries(source.trains)) {
-      const rawTrainData = isRecord(trainData) ? trainData : {};
+      const rawTrainData: Record<string, unknown> = isRecord(trainData)
+        ? trainData
+        : {};
       const rawVariants = rawTrainData["variants"];
 
       if (Array.isArray(rawVariants) && rawVariants.length > 0) {
@@ -326,20 +425,19 @@ export function buildNormalizedFtSourceFileContent(
         const primaryVariant = variants[0];
 
         nextTrains[trainNumber] = {
-          meta: { ...primaryVariant.meta, validity: undefined } as {
-            origine: string;
-            destination: string;
-            numeroEspagne: string;
-            numeroFrance: string;
-            categorieEspagne: string;
-            categorieFrance: string;
-            composition: string;
+          meta: {
+            origine: primaryVariant.meta.origine,
+            destination: primaryVariant.meta.destination,
+            numeroEspagne: primaryVariant.meta.numeroEspagne,
+            numeroFrance: primaryVariant.meta.numeroFrance,
+            categorieEspagne: primaryVariant.meta.categorieEspagne,
+            categorieFrance: primaryVariant.meta.categorieFrance,
+            composition: primaryVariant.meta.composition,
           },
           byRowKey: { ...primaryVariant.byRowKey },
           variants,
         };
 
-        delete (nextTrains[trainNumber].meta as Record<string, unknown>)["validity"];
         continue;
       }
 
@@ -354,7 +452,7 @@ export function buildNormalizedFtSourceFileContent(
       };
     }
 
-    normalized.trains = nextTrains;
+    normalized["trains"] = nextTrains;
   }
 
   const serialized = JSON.stringify(normalized, null, 2);
