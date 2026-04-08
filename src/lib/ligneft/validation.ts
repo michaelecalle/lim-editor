@@ -197,6 +197,26 @@ function validateTrainVariant(variant: unknown, path: string): string[] {
       errors.push(`${path}.meta.destination must be a string`);
     }
 
+    if (typeof meta.numeroEspagne !== "string") {
+      errors.push(`${path}.meta.numeroEspagne must be a string`);
+    }
+
+    if (typeof meta.numeroFrance !== "string") {
+      errors.push(`${path}.meta.numeroFrance must be a string`);
+    }
+
+    if (typeof meta.categorieEspagne !== "string") {
+      errors.push(`${path}.meta.categorieEspagne must be a string`);
+    }
+
+    if (typeof meta.categorieFrance !== "string") {
+      errors.push(`${path}.meta.categorieFrance must be a string`);
+    }
+
+    if (typeof meta.composition !== "string") {
+      errors.push(`${path}.meta.composition must be a string`);
+    }
+
     errors.push(...validateVariantValidity(meta.validity, `${path}.meta.validity`));
   }
 
@@ -206,6 +226,73 @@ function validateTrainVariant(variant: unknown, path: string): string[] {
 }
 
 function validateTrainData(trainData: unknown, path: string): string[] {
+  const errors: string[] = [];
+
+  if (!isObject(trainData)) {
+    errors.push(`${path} must be an object`);
+    return errors;
+  }
+
+  if (!isObject(trainData.meta)) {
+    errors.push(`${path}.meta must be an object`);
+  } else {
+    if (typeof trainData.meta.origine !== "string") {
+      errors.push(`${path}.meta.origine must be a string`);
+    }
+
+    if (typeof trainData.meta.destination !== "string") {
+      errors.push(`${path}.meta.destination must be a string`);
+    }
+
+    if (typeof trainData.meta.numeroEspagne !== "string") {
+      errors.push(`${path}.meta.numeroEspagne must be a string`);
+    }
+
+    if (typeof trainData.meta.numeroFrance !== "string") {
+      errors.push(`${path}.meta.numeroFrance must be a string`);
+    }
+
+    if (typeof trainData.meta.categorieEspagne !== "string") {
+      errors.push(`${path}.meta.categorieEspagne must be a string`);
+    }
+
+    if (typeof trainData.meta.categorieFrance !== "string") {
+      errors.push(`${path}.meta.categorieFrance must be a string`);
+    }
+
+    if (typeof trainData.meta.composition !== "string") {
+      errors.push(`${path}.meta.composition must be a string`);
+    }
+  }
+
+  if (!isObject(trainData.byRowKey)) {
+    errors.push(`${path}.byRowKey must be an object`);
+  } else {
+    for (const [rowKey, rowData] of Object.entries(trainData.byRowKey)) {
+      errors.push(...validateTrainRowData(rowData, `${path}.byRowKey.${rowKey}`));
+    }
+  }
+
+  if (trainData.variants != null) {
+    if (!Array.isArray(trainData.variants)) {
+      errors.push(`${path}.variants must be an array when present`);
+    } else {
+      trainData.variants.forEach((variant, index) => {
+        errors.push(...validateTrainVariant(variant, `${path}.variants[${index}]`));
+      });
+    }
+  }
+
+  if (
+    trainData.publishState != null &&
+    trainData.publishState !== "published" &&
+    trainData.publishState !== "local"
+  ) {
+    errors.push(`${path}.publishState must be "published" or "local" when present`);
+  }
+
+  return errors;
+}
   const errors: string[] = [];
 
   if (!isObject(trainData)) {
