@@ -247,7 +247,117 @@ export function getSourceRowsForDirection(
 export function buildNormalizedFtSourceFileContent(
   source: FtSourceDirectionTables
 ): string {
-  const serialized = JSON.stringify(source, null, 2);
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  function asString(value: unknown): string {
+    return typeof value === "string" ? value : "";
+  }
+
+  function buildCompleteMeta(meta: unknown) {
+    const record = isRecord(meta) ? meta : {};
+
+    return {
+      origine: asString(record["origine"]),
+      destination: asString(record["destination"]),
+      numeroEspagne: asString(record["numeroEspagne"]),
+      numeroFrance: asString(record["numeroFrance"]),
+      categorieEspagne: asString(record["categorieEspagne"]),
+      categorieFrance: asString(record["categorieFrance"]),
+      composition: asString(record["composition"]),
+    };
+  }
+
+  function buildCompleteValidity(validity: unknown) {
+    const record = isRecord(validity) ? validity : {};
+    const days = isRecord(record["days"]) ? record["days"] : {};
+
+    return {
+      startDate: asString(record["startDate"]),
+      endDate: asString(record["endDate"]),
+      days: {
+        monday: typeof days["monday"] === "boolean" ? days["monday"] : true,
+        tuesday: typeof days["tuesday"] === "boolean" ? days["tuesday"] : true,
+        wednesday:
+          typeof days["wednesday"] === "boolean" ? days["wednesday"] : true,
+        thursday:
+          typeof days["thursday"] === "boolean" ? days["thursday"] : true,
+        friday: typeof days["friday"] === "boolean" ? days["friday"] : true,
+        saturday:
+          typeof days["saturday"] === "boolean" ? days["saturday"] : true,
+        sunday: typeof days["sunday"] === "boolean" ? days["sunday"] : true,
+      },
+    };
+  }
+
+  function buildCompleteVariant(variant: unknown) {
+    const record = isRecord(variant) ? variant : {};
+    const meta = isRecord(record["meta"]) ? record["meta"] : {};
+    const byRowKey = isRecord(record["byRowKey"]) ? record["byRowKey"] : {};
+
+    return {
+      meta: {
+        ...buildCompleteMeta(meta),
+        validity: buildCompleteValidity(meta["validity"]),
+      },
+      byRowKey: { ...byRowKey },
+    };
+  }
+
+  const normalized: LigneFTNormalized = {
+    nordSud: {
+      rows: Array.isArray(source.nordSud?.rows) ? source.nordSud.rows : [],
+    },
+    sudNord: {
+      rows: Array.isArray(source.sudNord?.rows) ? source.sudNord.rows : [],
+    },
+  };
+
+  if (source.trains && typeof source.trains === "object") {
+    const nextTrains: NonNullable<LigneFTNormalized["trains"]> = {};
+
+    for (const [trainNumber, trainData] of Object.entries(source.trains)) {
+      const rawTrainData = isRecord(trainData) ? trainData : {};
+      const rawVariants = rawTrainData["variants"];
+
+      if (Array.isArray(rawVariants) && rawVariants.length > 0) {
+        const variants = rawVariants.map((variant) => buildCompleteVariant(variant));
+        const primaryVariant = variants[0];
+
+        nextTrains[trainNumber] = {
+          meta: { ...primaryVariant.meta, validity: undefined } as {
+            origine: string;
+            destination: string;
+            numeroEspagne: string;
+            numeroFrance: string;
+            categorieEspagne: string;
+            categorieFrance: string;
+            composition: string;
+          },
+          byRowKey: { ...primaryVariant.byRowKey },
+          variants,
+        };
+
+        delete (nextTrains[trainNumber].meta as Record<string, unknown>)["validity"];
+        continue;
+      }
+
+      const legacyMeta = buildCompleteMeta(rawTrainData["meta"]);
+      const legacyByRowKey = isRecord(rawTrainData["byRowKey"])
+        ? rawTrainData["byRowKey"]
+        : {};
+
+      nextTrains[trainNumber] = {
+        meta: legacyMeta,
+        byRowKey: { ...legacyByRowKey },
+      };
+    }
+
+    normalized.trains = nextTrains;
+  }
+
+  const serialized = JSON.stringify(normalized, null, 2);
 
   return [
     'import type { LigneFTNormalized } from "../types/ligneFTNormalized";',
@@ -256,6 +366,7 @@ export function buildNormalizedFtSourceFileContent(
     "",
   ].join("\n");
 }
+
 
 export function downloadTextFile(
   filename: string,
