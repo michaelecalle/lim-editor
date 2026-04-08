@@ -162,6 +162,11 @@ function buildEmptyLocalTrainVariantData(): FtSourceTrainVariantData {
     meta: {
       origine: "",
       destination: "",
+      numeroEspagne: "",
+      numeroFrance: "",
+      categorieEspagne: "",
+      categorieFrance: "",
+      composition: "",
       validity: buildDefaultVariantValidity(),
     },
     byRowKey: {},
@@ -175,6 +180,11 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
     return {
       origine: "",
       destination: "",
+      numeroEspagne: "",
+      numeroFrance: "",
+      categorieEspagne: "",
+      categorieFrance: "",
+      composition: "",
     };
   }
 
@@ -184,6 +194,11 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
     return {
       origine: "",
       destination: "",
+      numeroEspagne: "",
+      numeroFrance: "",
+      categorieEspagne: "",
+      categorieFrance: "",
+      composition: "",
     };
   }
 
@@ -191,6 +206,24 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
     origine: typeof rawMeta["origine"] === "string" ? rawMeta["origine"] : "",
     destination:
       typeof rawMeta["destination"] === "string" ? rawMeta["destination"] : "",
+    numeroEspagne:
+      typeof rawMeta["numeroEspagne"] === "string"
+        ? rawMeta["numeroEspagne"]
+        : "",
+    numeroFrance:
+      typeof rawMeta["numeroFrance"] === "string"
+        ? rawMeta["numeroFrance"]
+        : "",
+    categorieEspagne:
+      typeof rawMeta["categorieEspagne"] === "string"
+        ? rawMeta["categorieEspagne"]
+        : "",
+    categorieFrance:
+      typeof rawMeta["categorieFrance"] === "string"
+        ? rawMeta["categorieFrance"]
+        : "",
+    composition:
+      typeof rawMeta["composition"] === "string" ? rawMeta["composition"] : "",
   };
 }
 
@@ -451,7 +484,73 @@ function isTrainNumberInputValid(value: string): boolean {
   const trimmed = value.trim();
   return /^\d{1,6}$/.test(trimmed);
 }
+function getSuggestedNumeroFranceForPublish(
+  source: FtSourceDirectionTables,
+  trainNumber: string,
+  variant: FtSourceTrainVariantData
+): string {
+  const trimmedTrainNumber = trainNumber.trim();
 
+  if (trimmedTrainNumber === "") {
+    return "";
+  }
+
+  const trimmedStoredNumeroFrance = variant.meta.numeroFrance.trim();
+
+  if (trimmedStoredNumeroFrance !== "") {
+    return trimmedStoredNumeroFrance;
+  }
+
+  const direction = getDirectionFromTrainNumber(trimmedTrainNumber);
+
+  if (direction == null) {
+    return "";
+  }
+
+  const trimmedOrigin = variant.meta.origine.trim();
+  const trimmedDestination = variant.meta.destination.trim();
+
+  if (trimmedOrigin === "" || trimmedDestination === "") {
+    return "";
+  }
+
+  const directionRows = getDirectionRows(source, direction);
+  const originIndex = directionRows.findIndex(
+    (row) => row.visible.dependencia.trim() === trimmedOrigin
+  );
+  const destinationIndex = directionRows.findIndex(
+    (row) => row.visible.dependencia.trim() === trimmedDestination
+  );
+
+  if (originIndex === -1 || destinationIndex === -1) {
+    return "";
+  }
+
+  const startIndex = Math.min(originIndex, destinationIndex);
+  const endIndex = Math.max(originIndex, destinationIndex);
+
+  const isTransfrontalier = directionRows
+    .slice(startIndex, endIndex + 1)
+    .some((row) => row.visible.dependencia.trim() === "LIMITE ADIF - LFPSA");
+
+  if (!isTransfrontalier) {
+    return "";
+  }
+
+  const digits = trimmedTrainNumber.replace(/\D/g, "").trim();
+
+  if (!/^\d+$/.test(digits)) {
+    return "";
+  }
+
+  const parsed = Number(digits);
+
+  if (!Number.isFinite(parsed)) {
+    return "";
+  }
+
+  return String(parsed % 2 === 0 ? parsed + 1 : parsed - 1);
+}
 function materializeComputedConcForPublish(
   source: FtSourceDirectionTables
 ): FtSourceDirectionTables {
@@ -560,12 +659,58 @@ function buildPublishedSourceForPublish(
       continue;
     }
 
-    const variants =
+const variants =
+  Array.isArray(trainData.variants) && trainData.variants.length > 0
+    ? trainData.variants.map((variant) => ({
+        meta: {
+          origine: variant.meta.origine,
+          destination: variant.meta.destination,
+          numeroEspagne: variant.meta.numeroEspagne,
+          numeroFrance: variant.meta.numeroFrance,
+          categorieEspagne: variant.meta.categorieEspagne,
+          categorieFrance: variant.meta.categorieFrance,
+          composition: variant.meta.composition,
+          validity: {
+            startDate: variant.meta.validity.startDate,
+            endDate: variant.meta.validity.endDate,
+            days: {
+              monday: variant.meta.validity.days.monday,
+              tuesday: variant.meta.validity.days.tuesday,
+              wednesday: variant.meta.validity.days.wednesday,
+              thursday: variant.meta.validity.days.thursday,
+              friday: variant.meta.validity.days.friday,
+              saturday: variant.meta.validity.days.saturday,
+              sunday: variant.meta.validity.days.sunday,
+            },
+          },
+        },
+        byRowKey: {
+          ...variant.byRowKey,
+        },
+      }))
+    : undefined;
+
+    const publishedPrimaryNumeroFrance = getSuggestedNumeroFranceForPublish(
+      source,
+      trainNumber,
+      primaryVariant
+    );
+
+    const publishedVariants =
       Array.isArray(trainData.variants) && trainData.variants.length > 0
         ? trainData.variants.map((variant) => ({
             meta: {
               origine: variant.meta.origine,
               destination: variant.meta.destination,
+              numeroEspagne: variant.meta.numeroEspagne,
+              numeroFrance: getSuggestedNumeroFranceForPublish(
+                source,
+                trainNumber,
+                variant
+              ),
+              categorieEspagne: variant.meta.categorieEspagne,
+              categorieFrance: variant.meta.categorieFrance,
+              composition: variant.meta.composition,
               validity: {
                 startDate: variant.meta.validity.startDate,
                 endDate: variant.meta.validity.endDate,
@@ -590,11 +735,16 @@ function buildPublishedSourceForPublish(
       meta: {
         origine: primaryVariant.meta.origine,
         destination: primaryVariant.meta.destination,
+        numeroEspagne: primaryVariant.meta.numeroEspagne,
+        numeroFrance: publishedPrimaryNumeroFrance,
+        categorieEspagne: primaryVariant.meta.categorieEspagne,
+        categorieFrance: primaryVariant.meta.categorieFrance,
+        composition: primaryVariant.meta.composition,
       },
       byRowKey: {
         ...primaryVariant.byRowKey,
       },
-      ...(variants ? { variants } : {}),
+      ...(publishedVariants ? { variants: publishedVariants } : {}),
     };
   }
 
@@ -714,7 +864,10 @@ export default function FTEditorPage() {
   const [variantValidityError, setVariantValidityError] = useState<string | null>(
     null
   );
-
+  const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
+  const [numeroFranceWarning, setNumeroFranceWarning] = useState<string | null>(
+    null
+  );
   const directionLabel = getDirectionLabel(direction);
   const sourceTableLabel = getSourceTableLabel(direction);
 
@@ -1041,7 +1194,41 @@ export default function FTEditorPage() {
 
     return horaireRows.slice(startIndex, endIndex + 1);
   }, [horaireRows, validatedOrigin, validatedDestination]);
+  const selectedNumeroEspagneDisplay =
+    selectedTrainNumber.trim() !== "" ? selectedTrainNumber.trim() : "—";
 
+  const isSelectedTrainTransfrontalier = displayedHoraireRows.some(
+    (row) => row.visible.dependencia.trim() === "LIMITE ADIF - LFPSA"
+  );
+
+  const selectedNumeroFranceStored =
+    selectedVariant?.meta.numeroFrance?.trim() ?? "";
+
+  let selectedNumeroFranceSuggested = "";
+
+  if (
+    selectedTrainNumber.trim() !== "" &&
+    isSelectedTrainTransfrontalier
+  ) {
+    const digits = selectedTrainNumber.replace(/\D/g, "").trim();
+
+    if (/^\d+$/.test(digits)) {
+      const parsed = Number(digits);
+
+      if (Number.isFinite(parsed)) {
+        selectedNumeroFranceSuggested = String(
+          parsed % 2 === 0 ? parsed + 1 : parsed - 1
+        );
+      }
+    }
+  }
+
+  const selectedNumeroFranceDisplay =
+    selectedNumeroFranceStored !== ""
+      ? selectedNumeroFranceStored
+      : selectedNumeroFranceSuggested !== ""
+        ? selectedNumeroFranceSuggested
+        : "—";
   const handleValidateHoraireSelection = useCallback(() => {
     const trimmedOrigin = selectedOrigin.trim();
     const trimmedDestination = selectedDestination.trim();
@@ -1286,6 +1473,8 @@ export default function FTEditorPage() {
     });
 
     setVariantValidityError(null);
+    setIsNumeroFranceEditing(false);
+    setNumeroFranceWarning(null);
   }, [
     selectedTrainNumber,
     selectedVariantIndex,
@@ -2398,6 +2587,51 @@ export default function FTEditorPage() {
     selectedVariantIndex,
     variantValidityDraft,
   ]);
+  const updateSelectedTrainMeta = useCallback(
+    (
+      updater: (
+        currentMeta: FtSourceTrainVariantData["meta"]
+      ) => FtSourceTrainVariantData["meta"]
+    ) => {
+      if (selectedTrainNumber.trim() === "") {
+        return;
+      }
+
+      setParsedSource((previous) => {
+        const previousTrains = previous.trains ?? {};
+        const previousTrain = previousTrains[selectedTrainNumber];
+
+        if (!previousTrain) {
+          return previous;
+        }
+
+        const currentVariant = getVariantAtIndex(
+          previousTrain,
+          selectedVariantIndex
+        );
+
+        if (!currentVariant) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          trains: {
+            ...previousTrains,
+            [selectedTrainNumber]: replaceVariantAtIndex(
+              previousTrain,
+              selectedVariantIndex,
+              {
+                ...currentVariant,
+                meta: updater(currentVariant.meta),
+              }
+            ),
+          },
+        };
+      });
+    },
+    [selectedTrainNumber, selectedVariantIndex]
+  );
 
   const updateSelectedTrainRowData = useCallback(
     (
@@ -2528,7 +2762,97 @@ export default function FTEditorPage() {
     },
     [updateSelectedTrainRowData]
   );
+  const handleApplyNumeroEspagne = useCallback(
+    (nextValue: string) => {
+      const trimmedValue = nextValue.trim();
 
+      updateSelectedTrainMeta((currentMeta) => ({
+        ...currentMeta,
+        numeroEspagne: trimmedValue,
+      }));
+    },
+    [updateSelectedTrainMeta]
+  );
+
+  const handleApplyNumeroFrance = useCallback(
+    (nextValue: string) => {
+      const trimmedValue = nextValue.trim();
+
+      updateSelectedTrainMeta((currentMeta) => ({
+        ...currentMeta,
+        numeroFrance: trimmedValue,
+      }));
+    },
+    [updateSelectedTrainMeta]
+  );
+
+  const handleApplyCategorieEspagne = useCallback(
+    (nextValue: string) => {
+      const trimmedValue = nextValue.trim();
+
+      updateSelectedTrainMeta((currentMeta) => ({
+        ...currentMeta,
+        categorieEspagne: trimmedValue,
+      }));
+    },
+    [updateSelectedTrainMeta]
+  );
+
+  const handleApplyCategorieFrance = useCallback(
+    (nextValue: string) => {
+      const trimmedValue = nextValue.trim();
+
+      updateSelectedTrainMeta((currentMeta) => ({
+        ...currentMeta,
+        categorieFrance: trimmedValue,
+      }));
+    },
+    [updateSelectedTrainMeta]
+  );
+
+  const handleCommitNumeroFranceEdit = useCallback(() => {
+    const committedValue = selectedVariant?.meta.numeroFrance?.trim() ?? "";
+
+    if (committedValue === "") {
+      setNumeroFranceWarning(null);
+      setIsNumeroFranceEditing(false);
+      return;
+    }
+
+    for (const [otherTrainNumber, otherTrainData] of Object.entries(
+      parsedSource.trains ?? {}
+    )) {
+      if (otherTrainNumber === selectedTrainNumber) {
+        continue;
+      }
+
+      if (otherTrainNumber.trim() === committedValue) {
+        setNumeroFranceWarning(
+          `Attention : ce numéro correspond déjà au numéro Espagne du train ${otherTrainNumber}.`
+        );
+        setIsNumeroFranceEditing(false);
+        return;
+      }
+
+      const variantCount = getVariantCount(otherTrainData);
+
+      for (let variantIndex = 0; variantIndex < variantCount; variantIndex += 1) {
+        const otherVariant = getVariantAtIndex(otherTrainData, variantIndex);
+        const otherNumeroFrance = otherVariant?.meta.numeroFrance?.trim() ?? "";
+
+        if (otherNumeroFrance !== "" && otherNumeroFrance === committedValue) {
+          setNumeroFranceWarning(
+            `Attention : ce numéro correspond déjà au numéro France du train ${otherTrainNumber}.`
+          );
+          setIsNumeroFranceEditing(false);
+          return;
+        }
+      }
+    }
+
+    setNumeroFranceWarning(null);
+    setIsNumeroFranceEditing(false);
+  }, [parsedSource.trains, selectedTrainNumber, selectedVariant]);
   const handleDeleteRows = useCallback((rowIds: string[]) => {
     if (rowIds.length === 0) {
       return;
@@ -3544,6 +3868,22 @@ export default function FTEditorPage() {
                       availableTrainNumbers.map((trainNumber) => {
                         const isUnpublished =
                           unpublishedTrainNumbers.has(trainNumber);
+                        const trainData = parsedSource.trains?.[trainNumber];
+                        const primaryVariant = getVariantAtIndex(trainData, 0);
+
+                        const displayedNumeroFrance =
+                          primaryVariant != null
+                            ? getSuggestedNumeroFranceForPublish(
+                                parsedSource,
+                                trainNumber,
+                                primaryVariant
+                              )
+                            : "";
+
+                        const displayedTrainLabel =
+                          displayedNumeroFrance !== ""
+                            ? `${trainNumber} / ${displayedNumeroFrance}`
+                            : trainNumber;
 
                         return (
                           <option
@@ -3554,7 +3894,7 @@ export default function FTEditorPage() {
                               fontWeight: isUnpublished ? 700 : 400,
                             }}
                           >
-                            {trainNumber}
+                            {displayedTrainLabel}
                           </option>
                         );
                       })
@@ -3879,6 +4219,102 @@ export default function FTEditorPage() {
                 color: "#111827",
               }}
             >
+
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ fontSize: 18, fontWeight: 700 }}>
+                  Métadonnées train
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    color: "#111827",
+                  }}
+                >
+                  <div>
+                    <span style={{ fontWeight: 700 }}>Numéro Espagne :</span>{" "}
+                    <span>{selectedNumeroEspagneDisplay}</span>
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 700 }}>Numéro France :</span>{" "}
+                    {isNumeroFranceEditing ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={
+                          selectedNumeroFranceStored !== ""
+                            ? selectedNumeroFranceStored
+                            : selectedNumeroFranceSuggested
+                        }
+                        onChange={(event) =>
+                          handleApplyNumeroFrance(event.target.value)
+                        }
+                        onBlur={handleCommitNumeroFranceEdit}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleCommitNumeroFranceEdit();
+                          }
+                        }}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          border: "1px solid #d1d5db",
+                          background: "#ffffff",
+                          color: "#111827",
+                          font: "inherit",
+                          minWidth: 80,
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsNumeroFranceEditing(true)}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          color: "#111827",
+                          font: "inherit",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "2px",
+                        }}
+                      >
+                        {selectedNumeroFranceDisplay}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {numeroFranceWarning ? (
+                  <div
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      border: "1px solid #fed7aa",
+                      background: "#fff7ed",
+                      color: "#9a3412",
+                      fontSize: 13,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {numeroFranceWarning}
+                  </div>
+                ) : null}
+              </div>
+
               <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
                 Variantes
               </div>

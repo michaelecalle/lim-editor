@@ -5,6 +5,14 @@ export type FtSourceDirectionTable = {
 export type FtSourceTrainMeta = {
   origine: string;
   destination: string;
+
+  numeroEspagne: string;
+  numeroFrance: string;
+
+  categorieEspagne: string;
+  categorieFrance: string;
+
+  composition: string;
 };
 
 export type FtSourceVariantDays = {
