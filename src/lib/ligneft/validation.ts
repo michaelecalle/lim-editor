@@ -213,6 +213,10 @@ function validateTrainVariant(variant: unknown, path: string): string[] {
       errors.push(`${path}.meta.categorieFrance must be a string`);
     }
 
+    if ("materiel" in meta && typeof meta.materiel !== "string") {
+      errors.push(`${path}.meta.materiel must be a string`);
+    }
+
     if (typeof meta.composition !== "string") {
       errors.push(`${path}.meta.composition must be a string`);
     }
@@ -260,6 +264,10 @@ function validateTrainData(trainData: unknown, path: string): string[] {
       errors.push(`${path}.meta.categorieFrance must be a string`);
     }
 
+    if ("materiel" in trainData.meta && typeof trainData.meta.materiel !== "string") {
+      errors.push(`${path}.meta.materiel must be a string`);
+    }
+
     if (typeof trainData.meta.composition !== "string") {
       errors.push(`${path}.meta.composition must be a string`);
     }
@@ -293,7 +301,6 @@ function validateTrainData(trainData: unknown, path: string): string[] {
 
   return errors;
 }
-
 
 function validateTrains(trains: unknown, path: string): string[] {
   const errors: string[] = [];

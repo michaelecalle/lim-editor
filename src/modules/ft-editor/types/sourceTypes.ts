@@ -12,6 +12,7 @@ export type FtSourceTrainMeta = {
   categorieEspagne: string;
   categorieFrance: string;
 
+  materiel: string;
   composition: string;
 };
 

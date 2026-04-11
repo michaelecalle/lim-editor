@@ -166,6 +166,7 @@ function buildEmptyLocalTrainVariantData(): FtSourceTrainVariantData {
       numeroFrance: "",
       categorieEspagne: "",
       categorieFrance: "",
+      materiel: "",
       composition: "",
       validity: buildDefaultVariantValidity(),
     },
@@ -184,6 +185,7 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
       numeroFrance: "",
       categorieEspagne: "",
       categorieFrance: "",
+      materiel: "",
       composition: "",
     };
   }
@@ -198,6 +200,7 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
       numeroFrance: "",
       categorieEspagne: "",
       categorieFrance: "",
+      materiel: "",
       composition: "",
     };
   }
@@ -222,6 +225,8 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
       typeof rawMeta["categorieFrance"] === "string"
         ? rawMeta["categorieFrance"]
         : "",
+    materiel:
+      typeof rawMeta["materiel"] === "string" ? rawMeta["materiel"] : "",
     composition:
       typeof rawMeta["composition"] === "string" ? rawMeta["composition"] : "",
   };
@@ -659,36 +664,37 @@ function buildPublishedSourceForPublish(
       continue;
     }
 
-const variants =
-  Array.isArray(trainData.variants) && trainData.variants.length > 0
-    ? trainData.variants.map((variant) => ({
-        meta: {
-          origine: variant.meta.origine,
-          destination: variant.meta.destination,
-          numeroEspagne: variant.meta.numeroEspagne,
-          numeroFrance: variant.meta.numeroFrance,
-          categorieEspagne: variant.meta.categorieEspagne,
-          categorieFrance: variant.meta.categorieFrance,
-          composition: variant.meta.composition,
-          validity: {
-            startDate: variant.meta.validity.startDate,
-            endDate: variant.meta.validity.endDate,
-            days: {
-              monday: variant.meta.validity.days.monday,
-              tuesday: variant.meta.validity.days.tuesday,
-              wednesday: variant.meta.validity.days.wednesday,
-              thursday: variant.meta.validity.days.thursday,
-              friday: variant.meta.validity.days.friday,
-              saturday: variant.meta.validity.days.saturday,
-              sunday: variant.meta.validity.days.sunday,
+    const variants =
+      Array.isArray(trainData.variants) && trainData.variants.length > 0
+        ? trainData.variants.map((variant) => ({
+            meta: {
+              origine: variant.meta.origine,
+              destination: variant.meta.destination,
+              numeroEspagne: variant.meta.numeroEspagne,
+              numeroFrance: variant.meta.numeroFrance,
+              categorieEspagne: variant.meta.categorieEspagne,
+              categorieFrance: variant.meta.categorieFrance,
+              materiel: variant.meta.materiel,
+              composition: variant.meta.composition,
+              validity: {
+                startDate: variant.meta.validity.startDate,
+                endDate: variant.meta.validity.endDate,
+                days: {
+                  monday: variant.meta.validity.days.monday,
+                  tuesday: variant.meta.validity.days.tuesday,
+                  wednesday: variant.meta.validity.days.wednesday,
+                  thursday: variant.meta.validity.days.thursday,
+                  friday: variant.meta.validity.days.friday,
+                  saturday: variant.meta.validity.days.saturday,
+                  sunday: variant.meta.validity.days.sunday,
+                },
+              },
             },
-          },
-        },
-        byRowKey: {
-          ...variant.byRowKey,
-        },
-      }))
-    : undefined;
+            byRowKey: {
+              ...variant.byRowKey,
+            },
+          }))
+        : undefined;
 
     const publishedPrimaryNumeroFrance = getSuggestedNumeroFranceForPublish(
       source,
@@ -710,7 +716,11 @@ const variants =
               ),
               categorieEspagne: variant.meta.categorieEspagne,
               categorieFrance: variant.meta.categorieFrance,
-              composition: variant.meta.composition,
+              materiel: variant.meta.materiel.trim(),
+              composition:
+                variant.meta.composition.trim() === ""
+                  ? "US"
+                  : variant.meta.composition.trim(),
               validity: {
                 startDate: variant.meta.validity.startDate,
                 endDate: variant.meta.validity.endDate,
@@ -739,7 +749,11 @@ const variants =
         numeroFrance: publishedPrimaryNumeroFrance,
         categorieEspagne: primaryVariant.meta.categorieEspagne,
         categorieFrance: primaryVariant.meta.categorieFrance,
-        composition: primaryVariant.meta.composition,
+        materiel: primaryVariant.meta.materiel.trim(),
+        composition:
+          primaryVariant.meta.composition.trim() === ""
+            ? "US"
+            : primaryVariant.meta.composition.trim(),
       },
       byRowKey: {
         ...primaryVariant.byRowKey,
@@ -865,6 +879,12 @@ export default function FTEditorPage() {
     null
   );
   const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
+  const [isCategorieEspagneEditing, setIsCategorieEspagneEditing] =
+    useState(false);
+  const [isCategorieFranceEditing, setIsCategorieFranceEditing] =
+    useState(false);
+  const [isMaterielEditing, setIsMaterielEditing] = useState(false);
+  const [isCompositionEditing, setIsCompositionEditing] = useState(false);
   const [numeroFranceWarning, setNumeroFranceWarning] = useState<string | null>(
     null
   );
@@ -1229,6 +1249,23 @@ export default function FTEditorPage() {
       : selectedNumeroFranceSuggested !== ""
         ? selectedNumeroFranceSuggested
         : "—";
+
+  const selectedCategorieEspagneStored =
+    selectedVariant?.meta.categorieEspagne?.trim() ?? "";
+  const selectedCategorieFranceStored =
+    selectedVariant?.meta.categorieFrance?.trim() ?? "";
+  const selectedMaterielStored =
+    typeof selectedVariant?.meta.materiel === "string"
+      ? selectedVariant.meta.materiel
+      : "";
+
+  const selectedCategorieEspagneDisplay =
+    selectedCategorieEspagneStored !== "" ? selectedCategorieEspagneStored : "—";
+  const selectedCategorieFranceDisplay =
+    selectedCategorieFranceStored !== "" ? selectedCategorieFranceStored : "—";
+  const selectedMaterielDisplay =
+    selectedMaterielStored.trim() !== "" ? selectedMaterielStored.trim() : "—";
+
   const handleValidateHoraireSelection = useCallback(() => {
     const trimmedOrigin = selectedOrigin.trim();
     const trimmedDestination = selectedDestination.trim();
@@ -1474,6 +1511,10 @@ export default function FTEditorPage() {
 
     setVariantValidityError(null);
     setIsNumeroFranceEditing(false);
+    setIsCategorieEspagneEditing(false);
+    setIsCategorieFranceEditing(false);
+    setIsMaterielEditing(false);
+    setIsCompositionEditing(false);
     setNumeroFranceWarning(null);
   }, [
     selectedTrainNumber,
@@ -2633,6 +2674,55 @@ export default function FTEditorPage() {
     [selectedTrainNumber, selectedVariantIndex]
   );
 
+  const updateSelectedTrainMetaForAllVariants = useCallback(
+    (
+      updater: (
+        currentMeta: FtSourceTrainVariantData["meta"]
+      ) => FtSourceTrainVariantData["meta"]
+    ) => {
+      if (selectedTrainNumber.trim() === "") {
+        return;
+      }
+
+      setParsedSource((previous) => {
+        const previousTrains = previous.trains ?? {};
+        const previousTrain = previousTrains[selectedTrainNumber];
+
+        if (!previousTrain) {
+          return previous;
+        }
+
+        const variantCount = getVariantCount(previousTrain);
+        const nextVariants: FtSourceTrainVariantData[] = [];
+
+        for (let index = 0; index < variantCount; index += 1) {
+          const currentVariant = getVariantAtIndex(previousTrain, index);
+
+          if (!currentVariant) {
+            return previous;
+          }
+
+          nextVariants.push({
+            ...currentVariant,
+            meta: updater(currentVariant.meta),
+          });
+        }
+
+        return {
+          ...previous,
+          trains: {
+            ...previousTrains,
+            [selectedTrainNumber]: {
+              ...previousTrain,
+              variants: nextVariants,
+            },
+          },
+        };
+      });
+    },
+    [selectedTrainNumber]
+  );
+
   const updateSelectedTrainRowData = useCallback(
     (
       rowId: string,
@@ -2785,26 +2875,85 @@ export default function FTEditorPage() {
     },
     [updateSelectedTrainMeta]
   );
-
   const handleApplyCategorieEspagne = useCallback(
     (nextValue: string) => {
-      const trimmedValue = nextValue.trim();
+      const normalizedValue = nextValue.toUpperCase();
 
       updateSelectedTrainMeta((currentMeta) => ({
         ...currentMeta,
-        categorieEspagne: trimmedValue,
+        categorieEspagne: normalizedValue,
       }));
     },
     [updateSelectedTrainMeta]
   );
 
+  const handleCommitCategorieEspagneEdit = useCallback(() => {
+    const committedValue =
+      selectedVariant?.meta.categorieEspagne?.trim().toUpperCase() ?? "";
+
+    updateSelectedTrainMeta((currentMeta) => ({
+      ...currentMeta,
+      categorieEspagne: committedValue,
+    }));
+
+    setIsCategorieEspagneEditing(false);
+  }, [selectedVariant, updateSelectedTrainMeta]);
+
   const handleApplyCategorieFrance = useCallback(
+    (nextValue: string) => {
+      const normalizedValue = nextValue.toUpperCase();
+
+      updateSelectedTrainMeta((currentMeta) => ({
+        ...currentMeta,
+        categorieFrance: normalizedValue,
+      }));
+    },
+    [updateSelectedTrainMeta]
+  );
+
+  const handleCommitCategorieFranceEdit = useCallback(() => {
+    const committedValue =
+      selectedVariant?.meta.categorieFrance?.trim().toUpperCase() ?? "";
+
+    updateSelectedTrainMeta((currentMeta) => ({
+      ...currentMeta,
+      categorieFrance: committedValue,
+    }));
+
+    setIsCategorieFranceEditing(false);
+  }, [selectedVariant, updateSelectedTrainMeta]);
+
+  const handleApplyMateriel = useCallback(
+    (nextValue: string) => {
+      const normalizedValue = nextValue.toUpperCase();
+
+      updateSelectedTrainMetaForAllVariants((currentMeta) => ({
+        ...currentMeta,
+        materiel: normalizedValue,
+      }));
+    },
+    [updateSelectedTrainMetaForAllVariants]
+  );
+
+  const handleCommitMaterielEdit = useCallback(() => {
+    const committedValue =
+      selectedVariant?.meta.materiel?.trim().toUpperCase() ?? "";
+
+    updateSelectedTrainMetaForAllVariants((currentMeta) => ({
+      ...currentMeta,
+      materiel: committedValue,
+    }));
+
+    setIsMaterielEditing(false);
+  }, [selectedVariant, updateSelectedTrainMetaForAllVariants]);
+
+  const handleApplyComposition = useCallback(
     (nextValue: string) => {
       const trimmedValue = nextValue.trim();
 
       updateSelectedTrainMeta((currentMeta) => ({
         ...currentMeta,
-        categorieFrance: trimmedValue,
+        composition: trimmedValue,
       }));
     },
     [updateSelectedTrainMeta]
@@ -4296,6 +4445,145 @@ export default function FTEditorPage() {
                       </button>
                     )}
                   </div>
+
+                  <div>
+                    <span style={{ fontWeight: 700 }}>Type Espagne :</span>{" "}
+                    {isCategorieEspagneEditing ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={selectedCategorieEspagneStored}
+                        onChange={(event) =>
+                          handleApplyCategorieEspagne(event.target.value)
+                        }
+                        onBlur={handleCommitCategorieEspagneEdit}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleCommitCategorieEspagneEdit();
+                          }
+                        }}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          border: "1px solid #d1d5db",
+                          background: "#ffffff",
+                          color: "#111827",
+                          font: "inherit",
+                          minWidth: 80,
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsCategorieEspagneEditing(true)}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          color: "#111827",
+                          font: "inherit",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "2px",
+                        }}
+                      >
+                        {selectedCategorieEspagneDisplay}
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 700 }}>Type France :</span>{" "}
+                    {isCategorieFranceEditing ? (
+                      <input
+                        type="text"
+                        value={selectedCategorieFranceStored}
+                        onChange={(event) =>
+                          handleApplyCategorieFrance(event.target.value)
+                        }
+                        onBlur={handleCommitCategorieFranceEdit}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleCommitCategorieFranceEdit();
+                          }
+                        }}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          border: "1px solid #d1d5db",
+                          background: "#ffffff",
+                          color: "#111827",
+                          font: "inherit",
+                          minWidth: 80,
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsCategorieFranceEditing(true)}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          color: "#111827",
+                          font: "inherit",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "2px",
+                        }}
+                      >
+                        {selectedCategorieFranceDisplay}
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 700 }}>Matériel :</span>{" "}
+                    {isMaterielEditing ? (
+                      <input
+                        type="text"
+                        value={selectedMaterielStored}
+                        onChange={(event) =>
+                          handleApplyMateriel(event.target.value)
+                        }
+                        onBlur={handleCommitMaterielEdit}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleCommitMaterielEdit();
+                          }
+                        }}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          border: "1px solid #d1d5db",
+                          background: "#ffffff",
+                          color: "#111827",
+                          font: "inherit",
+                          minWidth: 80,
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsMaterielEditing(true)}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          color: "#111827",
+                          font: "inherit",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "2px",
+                        }}
+                      >
+                        {selectedMaterielDisplay}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {numeroFranceWarning ? (
@@ -4331,6 +4619,9 @@ export default function FTEditorPage() {
                     const startDate = validity?.startDate?.trim() ?? "";
                     const endDate = validity?.endDate?.trim() ?? "";
                     const days = validity?.days;
+                    const compositionStored = variant?.meta.composition?.trim() ?? "";
+                    const compositionDisplay =
+                      compositionStored === "" ? "US" : compositionStored;
 
                     const dayLabels = [
                       { key: "monday", label: "L" },
@@ -4528,6 +4819,77 @@ export default function FTEditorPage() {
                                 );
                               })}
                             </div>
+
+                            {selectedVariantIndex === index ? (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 8,
+                                  flexWrap: "wrap",
+                                  marginTop: 4,
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleApplyComposition("US");
+                                  }}
+                                  style={{
+                                    minWidth: 44,
+                                    padding: "6px 10px",
+                                    borderRadius: 999,
+                                    border:
+                                      compositionDisplay === "US"
+                                        ? "1px solid #2563eb"
+                                        : "1px solid #d1d5db",
+                                    background:
+                                      compositionDisplay === "US"
+                                        ? "#dbeafe"
+                                        : "#ffffff",
+                                    color:
+                                      compositionDisplay === "US"
+                                        ? "#1d4ed8"
+                                        : "#374151",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  US
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleApplyComposition("UM");
+                                  }}
+                                  style={{
+                                    minWidth: 44,
+                                    padding: "6px 10px",
+                                    borderRadius: 999,
+                                    border:
+                                      compositionDisplay === "UM"
+                                        ? "1px solid #2563eb"
+                                        : "1px solid #d1d5db",
+                                    background:
+                                      compositionDisplay === "UM"
+                                        ? "#dbeafe"
+                                        : "#ffffff",
+                                    color:
+                                      compositionDisplay === "UM"
+                                        ? "#1d4ed8"
+                                        : "#374151",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  UM
+                                </button>
+                              </div>
+                            ) : null}
 
                             {selectedVariantIndex === index &&
                             openVariantValidityEditor.trainNumber ===
