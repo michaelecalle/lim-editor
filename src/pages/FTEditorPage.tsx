@@ -140,6 +140,16 @@ function buildDefaultVariantValidity() {
   };
 }
 
+function getDefaultLigneValue(origine: string, destination: string): string {
+  const normalizedOrigin = origine.trim().toUpperCase();
+  const normalizedDestination = destination.trim().toUpperCase();
+
+  return normalizedOrigin.includes("CAN TUNIS AV") ||
+    normalizedDestination.includes("CAN TUNIS AV")
+    ? "050 - 066"
+    : "050";
+}
+
 function formatVariantDateForDisplay(value: string): string {
   const trimmed = value.trim();
 
@@ -162,6 +172,7 @@ function buildEmptyLocalTrainVariantData(): FtSourceTrainVariantData {
     meta: {
       origine: "",
       destination: "",
+      ligne: getDefaultLigneValue("", ""),
       numeroEspagne: "",
       numeroFrance: "",
       categorieEspagne: "",
@@ -181,6 +192,7 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
     return {
       origine: "",
       destination: "",
+      ligne: "050",
       numeroEspagne: "",
       numeroFrance: "",
       categorieEspagne: "",
@@ -196,6 +208,7 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
     return {
       origine: "",
       destination: "",
+      ligne: "050",
       numeroEspagne: "",
       numeroFrance: "",
       categorieEspagne: "",
@@ -205,10 +218,20 @@ function buildLegacyTrainMeta(trainData: FtSourceTrainData): FtSourceTrainMeta {
     };
   }
 
+  const origine =
+    typeof rawMeta["origine"] === "string" ? rawMeta["origine"] : "";
+  const destination =
+    typeof rawMeta["destination"] === "string" ? rawMeta["destination"] : "";
+  const ligneStored =
+    typeof rawMeta["ligne"] === "string" ? rawMeta["ligne"].trim() : "";
+
   return {
-    origine: typeof rawMeta["origine"] === "string" ? rawMeta["origine"] : "",
-    destination:
-      typeof rawMeta["destination"] === "string" ? rawMeta["destination"] : "",
+    origine,
+    destination,
+    ligne:
+      ligneStored !== ""
+        ? ligneStored
+        : getDefaultLigneValue(origine, destination),
     numeroEspagne:
       typeof rawMeta["numeroEspagne"] === "string"
         ? rawMeta["numeroEspagne"]
@@ -708,6 +731,13 @@ function buildPublishedSourceForPublish(
             meta: {
               origine: variant.meta.origine,
               destination: variant.meta.destination,
+              ligne:
+                variant.meta.ligne.trim() === ""
+                  ? getDefaultLigneValue(
+                      variant.meta.origine,
+                      variant.meta.destination
+                    )
+                  : variant.meta.ligne.trim(),
               numeroEspagne: variant.meta.numeroEspagne,
               numeroFrance: getSuggestedNumeroFranceForPublish(
                 source,
@@ -745,6 +775,13 @@ function buildPublishedSourceForPublish(
       meta: {
         origine: primaryVariant.meta.origine,
         destination: primaryVariant.meta.destination,
+        ligne:
+          primaryVariant.meta.ligne.trim() === ""
+            ? getDefaultLigneValue(
+                primaryVariant.meta.origine,
+                primaryVariant.meta.destination
+              )
+            : primaryVariant.meta.ligne.trim(),
         numeroEspagne: primaryVariant.meta.numeroEspagne,
         numeroFrance: publishedPrimaryNumeroFrance,
         categorieEspagne: primaryVariant.meta.categorieEspagne,
@@ -878,7 +915,8 @@ export default function FTEditorPage() {
   const [variantValidityError, setVariantValidityError] = useState<string | null>(
     null
   );
-  const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
+  const [isLigneEditing, setIsLigneEditing] = useState(false);
+const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
   const [isCategorieEspagneEditing, setIsCategorieEspagneEditing] =
     useState(false);
   const [isCategorieFranceEditing, setIsCategorieFranceEditing] =
@@ -1221,6 +1259,15 @@ export default function FTEditorPage() {
     (row) => row.visible.dependencia.trim() === "LIMITE ADIF - LFPSA"
   );
 
+  const selectedLigneStored = selectedVariant?.meta.ligne?.trim() ?? "";
+  const selectedLigneDisplay =
+    selectedLigneStored !== ""
+      ? selectedLigneStored
+      : getDefaultLigneValue(
+          selectedVariant?.meta.origine ?? "",
+          selectedVariant?.meta.destination ?? ""
+        );
+
   const selectedNumeroFranceStored =
     selectedVariant?.meta.numeroFrance?.trim() ?? "";
 
@@ -1353,6 +1400,10 @@ export default function FTEditorPage() {
                   ...nextSelectedVariant.meta,
                   origine: trimmedOrigin,
                   destination: trimmedDestination,
+                  ligne: getDefaultLigneValue(
+                    trimmedOrigin,
+                    trimmedDestination
+                  ),
                 },
               }
             ),
@@ -1510,6 +1561,7 @@ export default function FTEditorPage() {
     });
 
     setVariantValidityError(null);
+    setIsLigneEditing(false);
     setIsNumeroFranceEditing(false);
     setIsCategorieEspagneEditing(false);
     setIsCategorieFranceEditing(false);
@@ -2863,6 +2915,26 @@ export default function FTEditorPage() {
     },
     [updateSelectedTrainMeta]
   );
+  const handleApplyLigne = useCallback(
+    (nextValue: string) => {
+      updateSelectedTrainMeta((currentMeta) => ({
+        ...currentMeta,
+        ligne: nextValue,
+      }));
+    },
+    [updateSelectedTrainMeta]
+  );
+
+  const handleCommitLigneEdit = useCallback(() => {
+    const committedValue = selectedVariant?.meta.ligne?.trim() ?? "";
+
+    updateSelectedTrainMeta((currentMeta) => ({
+      ...currentMeta,
+      ligne: committedValue,
+    }));
+
+    setIsLigneEditing(false);
+  }, [selectedVariant, updateSelectedTrainMeta]);
 
   const handleApplyNumeroFrance = useCallback(
     (nextValue: string) => {
@@ -4393,6 +4465,53 @@ export default function FTEditorPage() {
                   <div>
                     <span style={{ fontWeight: 700 }}>Numéro Espagne :</span>{" "}
                     <span>{selectedNumeroEspagneDisplay}</span>
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 700 }}>Ligne :</span>{" "}
+                    {isLigneEditing ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        value={selectedLigneStored}
+                        onChange={(event) =>
+                          handleApplyLigne(event.target.value)
+                        }
+                        onBlur={handleCommitLigneEdit}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleCommitLigneEdit();
+                          }
+                        }}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          border: "1px solid #d1d5db",
+                          background: "#ffffff",
+                          color: "#111827",
+                          font: "inherit",
+                          minWidth: 80,
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsLigneEditing(true)}
+                        style={{
+                          padding: 0,
+                          border: "none",
+                          background: "transparent",
+                          color: "#111827",
+                          font: "inherit",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          textUnderlineOffset: "2px",
+                        }}
+                      >
+                        {selectedLigneDisplay}
+                      </button>
+                    )}
                   </div>
 
                   <div>

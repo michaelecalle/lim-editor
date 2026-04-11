@@ -32,6 +32,7 @@ export type FtDirectionCommonTable = {
 export type FtTrainMeta = {
   origine: string;
   destination: string;
+  ligne: string;
 
   numeroEspagne: string;
   numeroFrance: string;

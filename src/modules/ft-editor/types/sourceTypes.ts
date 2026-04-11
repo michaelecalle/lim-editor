@@ -5,6 +5,7 @@ export type FtSourceDirectionTable = {
 export type FtSourceTrainMeta = {
   origine: string;
   destination: string;
+  ligne: string;
 
   numeroEspagne: string;
   numeroFrance: string;

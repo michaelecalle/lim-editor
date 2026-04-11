@@ -20,6 +20,7 @@ import {
 } from "./github.js";
 import {
   buildNormalizedTsFile,
+  normalizeNormalizedDataForBackwardCompatibility,
   parseAndValidateNormalizedTs,
 } from "./serialization.js";
 import {
@@ -43,8 +44,9 @@ function parseAndValidateArchiveJson(content: string): LigneFTNormalized {
     );
   }
 
-  assertValidNormalizedData(parsed);
-  return parsed;
+  const normalized = normalizeNormalizedDataForBackwardCompatibility(parsed);
+  assertValidNormalizedData(normalized);
+  return normalized;
 }
 
 function buildArchiveJsonFile(data: LigneFTNormalized): string {

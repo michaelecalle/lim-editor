@@ -144,10 +144,20 @@ function sanitizePublishedTrains(
 
   function buildSanitizedMeta(meta: unknown) {
     const record: Record<string, unknown> = isRecord(meta) ? meta : {};
+    const origine = asString(record["origine"]);
+    const destination = asString(record["destination"]);
+    const ligneStored = asString(record["ligne"]).trim();
 
     return {
-      origine: asString(record["origine"]),
-      destination: asString(record["destination"]),
+      origine,
+      destination,
+      ligne:
+        ligneStored !== ""
+          ? ligneStored
+          : origine.toUpperCase().includes("CAN TUNIS AV") ||
+              destination.toUpperCase().includes("CAN TUNIS AV")
+            ? "050 - 066"
+            : "050",
       numeroEspagne: asString(record["numeroEspagne"]),
       numeroFrance: asString(record["numeroFrance"]),
       categorieEspagne: asString(record["categorieEspagne"]),
@@ -355,10 +365,20 @@ export function buildNormalizedFtSourceFileContent(
 
   function buildCompleteMeta(meta: unknown) {
     const record = isRecord(meta) ? meta : {};
+    const origine = asString(record["origine"]);
+    const destination = asString(record["destination"]);
+    const ligneStored = asString(record["ligne"]).trim();
 
     return {
-      origine: asString(record["origine"]),
-      destination: asString(record["destination"]),
+      origine,
+      destination,
+      ligne:
+        ligneStored !== ""
+          ? ligneStored
+          : origine.toUpperCase().includes("CAN TUNIS AV") ||
+              destination.toUpperCase().includes("CAN TUNIS AV")
+            ? "050 - 066"
+            : "050",
       numeroEspagne: asString(record["numeroEspagne"]),
       numeroFrance: asString(record["numeroFrance"]),
       categorieEspagne: asString(record["categorieEspagne"]),
@@ -430,6 +450,16 @@ export function buildNormalizedFtSourceFileContent(
           meta: {
             origine: primaryVariant.meta.origine,
             destination: primaryVariant.meta.destination,
+            ligne:
+              typeof primaryVariant.meta.ligne === "string" &&
+              primaryVariant.meta.ligne.trim() !== ""
+                ? primaryVariant.meta.ligne.trim()
+                : primaryVariant.meta.origine.toUpperCase().includes("CAN TUNIS AV") ||
+                    primaryVariant.meta.destination
+                      .toUpperCase()
+                      .includes("CAN TUNIS AV")
+                  ? "050 - 066"
+                  : "050",
             numeroEspagne: primaryVariant.meta.numeroEspagne,
             numeroFrance: primaryVariant.meta.numeroFrance,
             categorieEspagne: primaryVariant.meta.categorieEspagne,
@@ -586,6 +616,12 @@ export function validateNormalizedFtSource(
                 );
               }
 
+              if (typeof meta["ligne"] !== "string") {
+                diagnostics.push(
+                  `trains.${trainNumber}.variants[${variantIndex}].meta.ligne invalide : chaîne attendue.`
+                );
+              }
+
               if (typeof meta["numeroEspagne"] !== "string") {
                 diagnostics.push(
                   `trains.${trainNumber}.variants[${variantIndex}].meta.numeroEspagne invalide : chaîne attendue.`
@@ -711,6 +747,12 @@ export function validateNormalizedFtSource(
           if (typeof meta["destination"] !== "string") {
             diagnostics.push(
               `trains.${trainNumber}.meta.destination invalide : chaîne attendue.`
+            );
+          }
+
+          if (typeof meta["ligne"] !== "string") {
+            diagnostics.push(
+              `trains.${trainNumber}.meta.ligne invalide : chaîne attendue.`
             );
           }
 

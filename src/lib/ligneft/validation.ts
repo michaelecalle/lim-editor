@@ -197,6 +197,10 @@ function validateTrainVariant(variant: unknown, path: string): string[] {
       errors.push(`${path}.meta.destination must be a string`);
     }
 
+    if (typeof meta.ligne !== "string") {
+      errors.push(`${path}.meta.ligne must be a string`);
+    }
+
     if (typeof meta.numeroEspagne !== "string") {
       errors.push(`${path}.meta.numeroEspagne must be a string`);
     }
@@ -246,6 +250,10 @@ function validateTrainData(trainData: unknown, path: string): string[] {
 
     if (typeof trainData.meta.destination !== "string") {
       errors.push(`${path}.meta.destination must be a string`);
+    }
+
+    if (typeof trainData.meta.ligne !== "string") {
+      errors.push(`${path}.meta.ligne must be a string`);
     }
 
     if (typeof trainData.meta.numeroEspagne !== "string") {
