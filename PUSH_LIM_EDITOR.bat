@@ -2,7 +2,7 @@
 setlocal
 
 title LIM Editor - Git Push
-cd /d "C:\Dev\lim-editor-squelette"
+cd /d "S:\Dev\lim-editor"
 
 echo =========================================
 echo   LIM Editor - Preparation du push

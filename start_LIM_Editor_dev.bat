@@ -1,6 +1,6 @@
 @echo off
 title LIM Editor - Dev Server
-cd /d "C:\Dev\lim-editor-squelette"
+cd /d "S:\Dev\lim-editor"
 
 echo =========================================
 echo   LIM Editor - lancement local
