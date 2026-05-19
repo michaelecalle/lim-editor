@@ -28,10 +28,10 @@ echo.
 
 for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'"`) do set "COMMIT_DATETIME=%%I"
 
-set "DEFAULT_COMMIT_MSG=Update LIM Editor - %COMMIT_DATETIME%"
-set /p COMMIT_MSG=Message du commit [%DEFAULT_COMMIT_MSG%] : 
+set "COMMIT_MSG=Update LIM Editor - %COMMIT_DATETIME%"
 
-if "%COMMIT_MSG%"=="" set "COMMIT_MSG=%DEFAULT_COMMIT_MSG%"
+echo Message du commit automatique :
+echo %COMMIT_MSG%
 
 echo.
 echo ===== AJOUT DES FICHIERS =====
