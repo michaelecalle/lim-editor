@@ -7,10 +7,23 @@ import type {
 export const LIGNE_FT_RAW_URL =
   "https://raw.githubusercontent.com/michaelecalle/lim-editor/main/src/data/ligneFT.normalized.ts";
 
+export const LTV_NORMALIZED_RAW_URL =
+  "https://raw.githubusercontent.com/michaelecalle/lim-editor/main/src/data/ltv.normalized.json";
+
 export type RemoteFtSourceResult =
   | {
       ok: true;
       rawText: string;
+    }
+  | {
+      ok: false;
+      errorMessage: string;
+    };
+
+export type RemoteLtvNormalizedResult =
+  | {
+      ok: true;
+      data: unknown;
     }
   | {
       ok: false;
@@ -63,6 +76,37 @@ export async function fetchRemoteFtSourceRaw(): Promise<RemoteFtSourceResult> {
     return {
       ok: true,
       rawText,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      errorMessage:
+        error instanceof Error ? error.message : "Erreur réseau inconnue",
+    };
+  }
+}
+
+export async function fetchRemoteLtvNormalizedJson(): Promise<RemoteLtvNormalizedResult> {
+  try {
+    const cacheBustedUrl = `${LTV_NORMALIZED_RAW_URL}?t=${Date.now()}`;
+
+    const response = await fetch(cacheBustedUrl, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        errorMessage: `HTTP ${response.status} ${response.statusText}`,
+      };
+    }
+
+    const data = await response.json();
+
+    return {
+      ok: true,
+      data,
     };
   } catch (error) {
     return {

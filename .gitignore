@@ -16,3 +16,5 @@ Thumbs.db
 # Archives LIM Editor obsolètes au format TypeScript
 src/data/archives/ligneft/*.ts
 src/data/archive/*.ts
+.vercel
+.env*.local

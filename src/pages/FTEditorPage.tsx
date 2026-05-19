@@ -25,6 +25,7 @@ import {
   buildNormalizedFtSourceFileContent,
   downloadTextFile,
   fetchRemoteFtSourceRaw,
+  fetchRemoteLtvNormalizedJson,
   inspectRemoteFtSourceRaw,
   parseFtSourceArraysFromRaw,
   validateNormalizedFtSource,
@@ -34,12 +35,166 @@ import {
   fetchLigneFtArchives,
   publishLigneFtData,
 } from "../modules/ft-editor/api/ligneftApi";
+import { publishLtvNormalizedData } from "../modules/ft-editor/api/ltvApi";
 import { HORAIRE_COLUMNS } from "../modules/ft-editor/constants/ftColumns";
 import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRows";
 import { areSourceTablesEqual } from "../modules/ft-editor/utils/areSourceTablesEqual";
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
 type EditorTab = "FT" | "HORAIRE" | "LTV";
+
+type LtvEditorRow = {
+  id: string;
+  origin: "normalized" | "adif" | "manual";
+  status: "unchanged" | "modified" | "added";
+  code: string;
+  section: string;
+  via: string;
+  kmIni: string;
+  kmFin: string;
+  speed: string;
+  motivo: string;
+  fecha1: string;
+  hora1: string;
+  fecha2: string;
+  hora2: string;
+  viaCheck: boolean;
+  sistema: boolean;
+  soloCabeza: boolean;
+  csv: boolean;
+  observaciones: string;
+  editedFields?: Partial<Record<string, boolean>>;
+};
+
+type LtvAdifApiEntry = {
+  objectId: number;
+  ltvId: number | null;
+  ligne: string;
+  ligneDescription: string;
+  pkDebut: number;
+  pkFin: number;
+  vitesse: number;
+  voies: string;
+  motif: string;
+  debutZone: string;
+  finZone: string;
+  csv: string | null;
+  calendrier: string | null;
+  dateDebutVigueur: number | null;
+  heureDebutVigueur: string | null;
+  dateFinPrevue: number | null;
+  heureFinPrevue: string | null;
+  horaire: string | null;
+  nonSignaleeSysteme: string | null;
+  nonSignaleeVoie: string | null;
+  observations: string | null;
+  vehiculeTete: string | null;
+  typeTrain: string | null;
+  typeTrainObs: string | null;
+};
+
+type LtvAdifApiResponse =
+  | {
+      ok: true;
+      source: string;
+      fetchedAt: string;
+      sourceUpdatedAt: string | null;
+      sourceUpdatedFile: string | null;
+      total: number;
+      ltv: LtvAdifApiEntry[];
+      warning?: string;
+    }
+  | {
+      ok: false;
+      error?: string;
+    };
+
+type LtvNormalizedFile = {
+  meta: {
+    line: string;
+    publishedAt: string;
+    adif: {
+      source: string;
+      fetchedAt: string;
+      sourceUpdatedAt: string | null;
+      sourceUpdatedFile: string | null;
+    };
+  };
+  rows: LtvEditorRow[];
+  warnings: string[];
+};
+
+type LtvEditorTextField =
+  | "code"
+  | "section"
+  | "via"
+  | "kmIni"
+  | "kmFin"
+  | "speed"
+  | "motivo"
+  | "fecha1"
+  | "hora1"
+  | "fecha2"
+  | "hora2"
+  | "observaciones";
+
+const LTV_TEXT_FIELDS_BEFORE_FLAGS: LtvEditorTextField[] = [
+  "code",
+  "section",
+  "via",
+  "kmIni",
+  "kmFin",
+  "speed",
+  "motivo",
+  "fecha1",
+  "hora1",
+  "fecha2",
+  "hora2",
+];
+
+type LtvEditorFlagField = "viaCheck" | "sistema" | "soloCabeza" | "csv";
+
+const LTV_FLAG_FIELDS: LtvEditorFlagField[] = [
+  "viaCheck",
+  "sistema",
+  "soloCabeza",
+  "csv",
+];
+
+const LTV_TABLE_HEADERS = [
+  "CÓDIGO LTV",
+  "Trayecto / Estación",
+  "Vía",
+  "Km. Ini",
+  "Km. Fin",
+  "Veloc.",
+  "Motivo",
+  "Establecido fecha",
+  "Establecido hora",
+  "Fin prevista fecha",
+  "Fin prevista hora",
+  "No señalizada vía",
+  "No señalizada sistema",
+  "Sólo vehic. cabeza",
+  "CSV",
+  "Observaciones",
+];
+
+const LTV_ADIF_ENDPOINT_URL = "https://lim2.vercel.app/api/ltv";
+const LTV_ADIF_REFERENCE_LINE = "050";
+const LTV_ADIF_REFERENCE_PK = 616;
+
+function isAdifEntryOnReferenceLine(entry: LtvAdifApiEntry): boolean {
+  return entry.ligne.trim() === LTV_ADIF_REFERENCE_LINE;
+}
+
+function isAdifEntryOnReferenceRoute(entry: LtvAdifApiEntry): boolean {
+  return (
+    isAdifEntryOnReferenceLine(entry) &&
+    (entry.pkDebut >= LTV_ADIF_REFERENCE_PK ||
+      entry.pkFin >= LTV_ADIF_REFERENCE_PK)
+  );
+}
 
 function getDirectionLabel(direction: EditorDirection): string {
   return direction === "NORD_SUD" ? "Nord → Sud" : "Sud → Nord";
@@ -805,8 +960,530 @@ function buildPublishedSourceForPublish(
   } as unknown as LigneFTNormalized;
 }
 
+function buildEmptyLtvEditorRow(id: string): LtvEditorRow {
+  return {
+    id,
+    origin: "manual",
+    status: "added",
+    code: "",
+    section: "",
+    via: "",
+    kmIni: "",
+    kmFin: "",
+    speed: "",
+    motivo: "",
+    fecha1: "",
+    hora1: "",
+    fecha2: "",
+    hora2: "",
+    viaCheck: false,
+    sistema: false,
+    soloCabeza: false,
+    csv: false,
+    observaciones: "",
+  };
+}
+
+function buildNextLtvManualId(rows: LtvEditorRow[]): string {
+  let maxNumber = 0;
+
+  for (const row of rows) {
+    const match = row.id.match(/^ltv-manual-(\d+)$/);
+
+    if (!match) {
+      continue;
+    }
+
+    maxNumber = Math.max(maxNumber, Number(match[1]));
+  }
+
+  return `ltv-manual-${String(maxNumber + 1).padStart(4, "0")}`;
+}
+
+function moveLtvEditorRow(
+  rows: LtvEditorRow[],
+  draggedRowId: string,
+  targetRowId: string
+): LtvEditorRow[] {
+  if (draggedRowId === targetRowId) {
+    return rows;
+  }
+
+  const draggedIndex = rows.findIndex((row) => row.id === draggedRowId);
+  const targetIndex = rows.findIndex((row) => row.id === targetRowId);
+
+  if (draggedIndex === -1 || targetIndex === -1) {
+    return rows;
+  }
+
+  const nextRows = [...rows];
+  const [draggedRow] = nextRows.splice(draggedIndex, 1);
+
+  if (!draggedRow) {
+    return rows;
+  }
+
+  nextRows.splice(targetIndex, 0, draggedRow);
+  return nextRows;
+}
+
+function formatLtvDateInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+
+  if (digits.length <= 2) {
+    return day;
+  }
+
+  if (digits.length <= 4) {
+    return `${day}/${month}`;
+  }
+
+  return `${day}/${month}/${year}`;
+}
+
+function formatLtvTimeInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  const hours = digits.slice(0, 2);
+  const minutes = digits.slice(2, 4);
+
+  if (digits.length <= 2) {
+    return hours;
+  }
+
+  return `${hours}:${minutes}`;
+}
+
+function formatLtvDecimalKmInput(value: string): string {
+  const normalizedValue = value.replace(",", ".").replace(/[^\d.]/g, "");
+
+  if (!normalizedValue.includes(".")) {
+    const digits = normalizedValue.replace(/\D/g, "").slice(0, 6);
+
+    if (digits.length <= 3) {
+      return digits;
+    }
+
+    return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  }
+
+  const [rawIntegerPart, ...decimalParts] = normalizedValue.split(".");
+  const integerPart = rawIntegerPart.replace(/\D/g, "").slice(0, 3);
+  const decimalPart = decimalParts.join("").replace(/\D/g, "").slice(0, 3);
+
+  if (integerPart === "" && decimalPart === "") {
+    return "";
+  }
+
+  return `${integerPart}.${decimalPart}`;
+}
+
+function formatLtvTextInput(
+  field: LtvEditorTextField,
+  value: string
+): string {
+  if (field === "code") {
+    return value.replace(/\D/g, "");
+  }
+
+  if (field === "kmIni" || field === "kmFin") {
+    return formatLtvDecimalKmInput(value);
+  }
+
+  if (field === "speed") {
+    const hasAsterisk = value.includes("*");
+    const digits = value.replace(/\D/g, "");
+
+    return hasAsterisk && digits !== "" ? `${digits}*` : digits;
+  }
+
+  if (field === "fecha1" || field === "fecha2") {
+    return formatLtvDateInput(value);
+  }
+
+  if (field === "hora1" || field === "hora2") {
+    return formatLtvTimeInput(value);
+  }
+
+  return value;
+}
+
+function getLtvInputMode(
+  field: LtvEditorTextField
+): "text" | "numeric" | "decimal" {
+  if (field === "kmIni" || field === "kmFin") {
+    return "decimal";
+  }
+
+  if (
+    field === "code" ||
+    field === "speed" ||
+    field === "fecha1" ||
+    field === "fecha2" ||
+    field === "hora1" ||
+    field === "hora2"
+  ) {
+    return "numeric";
+  }
+
+  return "text";
+}
+
+function formatAdifTextValue(value: string | number | null | undefined): string {
+  if (value == null) {
+    return "";
+  }
+
+  return String(value).trim();
+}
+
+function formatAdifLtvSection(entry: LtvAdifApiEntry): string {
+  const start = formatAdifTextValue(entry.debutZone);
+  const end = formatAdifTextValue(entry.finZone);
+
+  if (start !== "" && end !== "" && start !== end) {
+    return `${start} → ${end}`;
+  }
+
+  if (start !== "") {
+    return start;
+  }
+
+  if (end !== "") {
+    return end;
+  }
+
+  return formatAdifTextValue(entry.ligneDescription);
+}
+
+function formatAdifLtvKm(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "";
+  }
+
+  return formatLtvDecimalKmInput(String(value));
+}
+
+function formatAdifLtvDate(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear());
+
+  return `${day}/${month}/${year}`;
+}
+
+function formatAdifLtvTime(value: string | null | undefined): string {
+  const trimmed = formatAdifTextValue(value);
+
+  if (trimmed === "") {
+    return "";
+  }
+
+  const match = trimmed.match(/(\d{1,2}):(\d{2})/);
+
+  if (!match) {
+    return trimmed;
+  }
+
+  const hours = match[1].padStart(2, "0");
+  const minutes = match[2];
+
+  return `${hours}:${minutes}`;
+}
+
+function isAdifFlagEnabled(value: string | null | undefined): boolean {
+  const normalizedValue = formatAdifTextValue(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+  return ["1", "S", "SI", "YES", "TRUE", "X"].includes(normalizedValue);
+}
+
+function formatAdifSourceDateForMessage(
+  value: string | null | undefined
+): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleDateString("fr-FR");
+}
+
+function mapAdifEntryToLtvEditorRow(entry: LtvAdifApiEntry): LtvEditorRow {
+  const code =
+    entry.ltvId != null && Number.isFinite(entry.ltvId)
+      ? String(entry.ltvId)
+      : String(entry.objectId);
+
+  return {
+    id: `ltv-adif-${entry.objectId}`,
+    origin: "adif",
+    status: "unchanged",
+    code,
+    section: formatAdifLtvSection(entry),
+    via: formatAdifTextValue(entry.voies),
+    kmIni: formatAdifLtvKm(entry.pkDebut),
+    kmFin: formatAdifLtvKm(entry.pkFin),
+    speed: formatAdifTextValue(entry.vitesse),
+    motivo: formatAdifTextValue(entry.motif),
+    fecha1: formatAdifLtvDate(entry.dateDebutVigueur),
+    hora1: formatAdifLtvTime(entry.heureDebutVigueur),
+    fecha2: formatAdifLtvDate(entry.dateFinPrevue),
+    hora2: formatAdifLtvTime(entry.heureFinPrevue),
+    viaCheck: isAdifFlagEnabled(entry.nonSignaleeVoie),
+    sistema: isAdifFlagEnabled(entry.nonSignaleeSysteme),
+    soloCabeza: isAdifFlagEnabled(entry.vehiculeTete),
+    csv: isAdifFlagEnabled(entry.csv),
+    observaciones: formatAdifTextValue(entry.observations),
+  };
+}
+
+function getLtvNormalizedRowBackground(row: LtvEditorRow): string {
+  if (row.origin === "adif") {
+    return "#ecfdf5";
+  }
+
+  if (row.origin === "manual") {
+    return "#eff6ff";
+  }
+
+  return "#f9fafb";
+}
+
+function isLtvRowCompletelyEmpty(row: LtvEditorRow): boolean {
+  return (
+    row.code.trim() === "" &&
+    row.section.trim() === "" &&
+    row.via.trim() === "" &&
+    row.kmIni.trim() === "" &&
+    row.kmFin.trim() === "" &&
+    row.speed.trim() === "" &&
+    row.motivo.trim() === "" &&
+    row.fecha1.trim() === "" &&
+    row.hora1.trim() === "" &&
+    row.fecha2.trim() === "" &&
+    row.hora2.trim() === "" &&
+    row.observaciones.trim() === "" &&
+    !row.viaCheck &&
+    !row.sistema &&
+    !row.soloCabeza &&
+    !row.csv
+  );
+}
+
+function getLtvPublicationWarnings(rows: LtvEditorRow[]): string[] {
+  const warnings: string[] = [];
+
+  rows.forEach((row, index) => {
+    const missingFields: string[] = [];
+
+    if (row.code.trim() === "") {
+      missingFields.push("code");
+    }
+
+    if (row.kmIni.trim() === "") {
+      missingFields.push("kmIni");
+    }
+
+    if (row.kmFin.trim() === "") {
+      missingFields.push("kmFin");
+    }
+
+    if (row.speed.trim() === "") {
+      missingFields.push("speed");
+    }
+
+    if (missingFields.length > 0) {
+      warnings.push(
+        `Ligne ${index + 1} : champs essentiels manquants (${missingFields.join(
+          ", "
+        )}).`
+      );
+    }
+  });
+
+  return warnings;
+}
+
+function buildLtvNormalizedFile(
+  rows: LtvEditorRow[],
+  adifMeta: {
+    source: string;
+    fetchedAt: string;
+    sourceUpdatedAt: string | null;
+    sourceUpdatedFile: string | null;
+  }
+): LtvNormalizedFile {
+  const publishableRows: LtvEditorRow[] = rows
+    .filter((row) => !isLtvRowCompletelyEmpty(row))
+    .map((row): LtvEditorRow => ({
+      ...row,
+      origin: row.origin === "adif" ? "adif" : "manual",
+      status: "unchanged",
+    }));
+
+  return {
+    meta: {
+      line: LTV_ADIF_REFERENCE_LINE,
+      publishedAt: new Date().toISOString(),
+      adif: adifMeta,
+    },
+    rows: publishableRows,
+    warnings: getLtvPublicationWarnings(publishableRows),
+  };
+}
+
+function readLtvTextField(
+  value: unknown,
+  field: LtvEditorTextField
+): string {
+  return formatLtvTextInput(field, typeof value === "string" ? value : "");
+}
+
+function readLtvFlagField(value: unknown): boolean {
+  return value === true;
+}
+
+function readLtvEditedFields(value: unknown): Partial<Record<string, boolean>> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const editedFields: Partial<Record<string, boolean>> = {};
+
+  for (const [field, isEdited] of Object.entries(value)) {
+    if (isEdited === true) {
+      editedFields[field] = true;
+    }
+  }
+
+  return Object.keys(editedFields).length > 0 ? editedFields : undefined;
+}
+
+function readLtvNormalizedRowsFromFile(data: unknown): LtvEditorRow[] {
+  if (!isRecord(data) || !Array.isArray(data.rows)) {
+    return [];
+  }
+
+  return data.rows
+    .map((rawRow, index): LtvEditorRow | null => {
+      if (!isRecord(rawRow)) {
+        return null;
+      }
+
+      const rawOrigin = rawRow.origin;
+      const origin: LtvEditorRow["origin"] =
+        rawOrigin === "adif" || rawOrigin === "manual" ? rawOrigin : "manual";
+
+      const rawStatus = rawRow.status;
+      const status: LtvEditorRow["status"] =
+        rawStatus === "modified" || rawStatus === "added"
+          ? rawStatus
+          : "unchanged";
+
+      const fallbackId =
+        origin === "adif"
+          ? `ltv-adif-loaded-${index + 1}`
+          : `ltv-manual-loaded-${index + 1}`;
+
+      return {
+        id: typeof rawRow.id === "string" && rawRow.id.trim() !== ""
+          ? rawRow.id
+          : fallbackId,
+        origin,
+        status,
+        code: readLtvTextField(rawRow.code, "code"),
+        section: readLtvTextField(rawRow.section, "section"),
+        via: readLtvTextField(rawRow.via, "via"),
+        kmIni: readLtvTextField(rawRow.kmIni, "kmIni"),
+        kmFin: readLtvTextField(rawRow.kmFin, "kmFin"),
+        speed: readLtvTextField(rawRow.speed, "speed"),
+        motivo: readLtvTextField(rawRow.motivo, "motivo"),
+        fecha1: readLtvTextField(rawRow.fecha1, "fecha1"),
+        hora1: readLtvTextField(rawRow.hora1, "hora1"),
+        fecha2: readLtvTextField(rawRow.fecha2, "fecha2"),
+        hora2: readLtvTextField(rawRow.hora2, "hora2"),
+        viaCheck: readLtvFlagField(rawRow.viaCheck),
+        sistema: readLtvFlagField(rawRow.sistema),
+        soloCabeza: readLtvFlagField(rawRow.soloCabeza),
+        csv: readLtvFlagField(rawRow.csv),
+        observaciones: readLtvTextField(rawRow.observaciones, "observaciones"),
+        editedFields: readLtvEditedFields(rawRow.editedFields),
+      };
+    })
+    .filter((row): row is LtvEditorRow => row !== null);
+}
+
+function readLtvNormalizedFileInfo(data: unknown): {
+  publishedAt: string;
+  source: string;
+  fetchedAt: string;
+  sourceUpdatedAt: string | null;
+  sourceUpdatedFile: string | null;
+  warningCount: number;
+} | null {
+  if (!isRecord(data) || !isRecord(data.meta)) {
+    return null;
+  }
+
+  const meta = data.meta;
+  const adif = isRecord(meta.adif) ? meta.adif : {};
+  const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+
+  return {
+    publishedAt: typeof meta.publishedAt === "string" ? meta.publishedAt : "",
+    source: typeof adif.source === "string" ? adif.source : "unknown",
+    fetchedAt: typeof adif.fetchedAt === "string" ? adif.fetchedAt : "",
+    sourceUpdatedAt:
+      typeof adif.sourceUpdatedAt === "string" ? adif.sourceUpdatedAt : null,
+    sourceUpdatedFile:
+      typeof adif.sourceUpdatedFile === "string"
+        ? adif.sourceUpdatedFile
+        : null,
+    warningCount: warnings.length,
+  };
+}
+
+function formatLtvDateTimeForDisplay(value: string): string {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue === "") {
+    return "—";
+  }
+
+  const date = new Date(trimmedValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return trimmedValue;
+  }
+
+  return date.toLocaleString("fr-FR", {
+    dateStyle: "long",
+    timeStyle: "medium",
+  });
+}
+
 export default function FTEditorPage() {
-  const [activeTab, setActiveTab] = useState<EditorTab>("FT");
+  const [activeTab, setActiveTab] = useState<EditorTab>("LTV");
   const [direction, setDirection] = useState<EditorDirection>("NORD_SUD");
   const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>("");
   const [selectedOrigin, setSelectedOrigin] = useState<string>("");
@@ -845,6 +1522,43 @@ export default function FTEditorPage() {
     nordSud: { rows: [] },
     sudNord: { rows: [] },
   });
+
+  const [ltvNormalizedStatus, setLtvNormalizedStatus] =
+    useState<SourceStatus>("idle");
+  const [ltvNormalizedMessage, setLtvNormalizedMessage] = useState<string>(
+    "Aucune tentative de chargement du fichier LTV normalisé."
+  );
+  const [ltvNormalizedFileInfo, setLtvNormalizedFileInfo] = useState<{
+    publishedAt: string;
+    source: string;
+    fetchedAt: string;
+    sourceUpdatedAt: string | null;
+    sourceUpdatedFile: string | null;
+    warningCount: number;
+  } | null>(null);
+  const [ltvNormalizedRows, setLtvNormalizedRows] = useState<LtvEditorRow[]>([]);
+  const [ltvAdifRows, setLtvAdifRows] = useState<LtvEditorRow[]>([]);
+  const [ltvAdifOtherRows, setLtvAdifOtherRows] = useState<LtvEditorRow[]>([]);
+  const [ltvAdifStatus, setLtvAdifStatus] = useState<SourceStatus>("idle");
+  const [ltvAdifMeta, setLtvAdifMeta] = useState<{
+    source: string;
+    fetchedAt: string;
+    sourceUpdatedAt: string | null;
+    sourceUpdatedFile: string | null;
+  }>({
+    source: "unknown",
+    fetchedAt: "",
+    sourceUpdatedAt: null,
+    sourceUpdatedFile: null,
+  });
+  const [ltvAdifMessage, setLtvAdifMessage] = useState<string>(
+    "Aucune tentative de chargement ADIF."
+  );
+  const [pendingLtvDeleteRowId, setPendingLtvDeleteRowId] = useState<
+    string | null
+  >(null);
+  const [draggedLtvRowId, setDraggedLtvRowId] = useState<string | null>(null);
+  const [dragOverLtvRowId, setDragOverLtvRowId] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [requestedEditorField, setRequestedEditorField] =
     useState<EditorDirectField | null>(null);
@@ -1098,6 +1812,140 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      setLtvAdifStatus("loading");
+      setLtvAdifMessage("Chargement des LTV ADIF en cours...");
+      setLtvAdifRows([]);
+      setLtvAdifOtherRows([]);
+      setLtvAdifMeta({
+        source: "unknown",
+        fetchedAt: "",
+        sourceUpdatedAt: null,
+        sourceUpdatedFile: null,
+      });
+
+      try {
+        const response = await fetch(LTV_ADIF_ENDPOINT_URL);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = (await response.json()) as LtvAdifApiResponse;
+
+        if (!payload.ok) {
+          throw new Error(payload.error ?? "Réponse ADIF invalide.");
+        }
+
+        const adifEntries = Array.isArray(payload.ltv) ? payload.ltv : [];
+        const lineEntries = adifEntries.filter(isAdifEntryOnReferenceLine);
+        const mainEntries = lineEntries.filter(isAdifEntryOnReferenceRoute);
+        const otherEntries = lineEntries.filter(
+          (entry) => !isAdifEntryOnReferenceRoute(entry)
+        );
+
+        const nextRows = mainEntries.map(mapAdifEntryToLtvEditorRow);
+        const nextOtherRows = otherEntries.map(mapAdifEntryToLtvEditorRow);
+
+        if (cancelled) {
+          return;
+        }
+
+        const sourceDate = formatAdifSourceDateForMessage(
+          payload.sourceUpdatedAt
+        );
+        const sourceDateText =
+          sourceDate !== "" ? ` Données source du ${sourceDate}.` : "";
+        const warningText = payload.warning ? ` ${payload.warning}.` : "";
+
+        setLtvAdifRows(nextRows);
+        setLtvAdifOtherRows(nextOtherRows);
+        setLtvAdifMeta({
+          source: payload.source,
+          fetchedAt: payload.fetchedAt,
+          sourceUpdatedAt: payload.sourceUpdatedAt,
+          sourceUpdatedFile: payload.sourceUpdatedFile,
+        });
+        setLtvAdifStatus("success");
+        setLtvAdifMessage(
+          `${lineEntries.length} LTV ADIF ligne ${LTV_ADIF_REFERENCE_LINE} chargée${
+            lineEntries.length > 1 ? "s" : ""
+          } depuis ${payload.source} : ${nextRows.length} Barcelona/Figueras, ${nextOtherRows.length} autres.${sourceDateText}${warningText}`
+        );
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setLtvAdifRows([]);
+        setLtvAdifOtherRows([]);
+        setLtvAdifMeta({
+          source: "unknown",
+          fetchedAt: "",
+          sourceUpdatedAt: null,
+          sourceUpdatedFile: null,
+        });
+        setLtvAdifStatus("error");
+        setLtvAdifMessage(
+          error instanceof Error
+            ? `Chargement ADIF échoué : ${error.message}`
+            : "Chargement ADIF échoué : erreur inconnue."
+        );
+      }
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+    useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      setLtvNormalizedStatus("loading");
+      setLtvNormalizedMessage("Chargement du fichier LTV normalisé en cours...");
+
+      const result = await fetchRemoteLtvNormalizedJson();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!result.ok) {
+        setLtvNormalizedStatus("error");
+        setLtvNormalizedFileInfo(null);
+        setLtvNormalizedMessage(
+          `Chargement du fichier LTV normalisé échoué : ${result.errorMessage}`
+        );
+        return;
+      }
+
+      const nextRows = readLtvNormalizedRowsFromFile(result.data);
+      const nextFileInfo = readLtvNormalizedFileInfo(result.data);
+
+      setLtvNormalizedRows(nextRows);
+      setLtvNormalizedFileInfo(nextFileInfo);
+      setLtvNormalizedStatus("success");
+      setLtvNormalizedMessage(
+        `${nextRows.length} LTV normalisée${
+          nextRows.length > 1 ? "s" : ""
+        } chargée${nextRows.length > 1 ? "s" : ""} depuis le fichier actif.`
+      );
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const sourceRows = useMemo(() => {
     return getDirectionRows(parsedSource, direction);
   }, [parsedSource, direction]);
@@ -1312,6 +2160,24 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     selectedCategorieFranceStored !== "" ? selectedCategorieFranceStored : "—";
   const selectedMaterielDisplay =
     selectedMaterielStored.trim() !== "" ? selectedMaterielStored.trim() : "—";
+
+  const pendingLtvDeleteRow = useMemo(() => {
+    if (pendingLtvDeleteRowId == null) {
+      return null;
+    }
+
+    return (
+      ltvNormalizedRows.find((row) => row.id === pendingLtvDeleteRowId) ?? null
+    );
+  }, [ltvNormalizedRows, pendingLtvDeleteRowId]);
+
+  const importedLtvIdSet = useMemo(() => {
+    return new Set(
+      ltvNormalizedRows
+        .filter((row) => row.origin === "adif")
+        .map((row) => row.id)
+    );
+  }, [ltvNormalizedRows]);
 
   const handleValidateHoraireSelection = useCallback(() => {
     const trimmedOrigin = selectedOrigin.trim();
@@ -3389,6 +4255,218 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     []
   );
 
+  const handleUpdateLtvTextField = useCallback(
+    (rowId: string, field: LtvEditorTextField, nextValue: string) => {
+      const formattedValue = formatLtvTextInput(field, nextValue);
+
+      setLtvNormalizedRows((previous) =>
+        previous.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                [field]: formattedValue,
+                status: row.status === "added" ? "added" : "modified",
+                editedFields:
+                  row.origin === "adif"
+                    ? {
+                        ...row.editedFields,
+                        [field]: true,
+                      }
+                    : row.editedFields,
+              }
+            : row
+        )
+      );
+    },
+    []
+  );
+
+  const handleToggleLtvFlagField = useCallback(
+    (rowId: string, field: LtvEditorFlagField) => {
+      setLtvNormalizedRows((previous) =>
+        previous.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                [field]: !row[field],
+                status: row.status === "added" ? "added" : "modified",
+                editedFields:
+                  row.origin === "adif"
+                    ? {
+                        ...row.editedFields,
+                        [field]: true,
+                      }
+                    : row.editedFields,
+              }
+            : row
+        )
+      );
+    },
+    []
+  );
+
+  const handleAddLtvNormalizedRow = useCallback(() => {
+    setLtvNormalizedRows((previous) => {
+      const nextId = buildNextLtvManualId(previous);
+      return [...previous, buildEmptyLtvEditorRow(nextId)];
+    });
+  }, []);
+
+  const handleRequestDeleteLtvNormalizedRow = useCallback((rowId: string) => {
+    setPendingLtvDeleteRowId(rowId);
+  }, []);
+
+  const handleCancelDeleteLtvNormalizedRow = useCallback(() => {
+    setPendingLtvDeleteRowId(null);
+  }, []);
+
+  const handleConfirmDeleteLtvNormalizedRow = useCallback(() => {
+    if (pendingLtvDeleteRowId == null) {
+      return;
+    }
+
+    setLtvNormalizedRows((previous) =>
+      previous.filter((row) => row.id !== pendingLtvDeleteRowId)
+    );
+    setPendingLtvDeleteRowId(null);
+  }, [pendingLtvDeleteRowId]);
+
+  const handleStartLtvRowDrag = useCallback((rowId: string) => {
+    setDraggedLtvRowId(rowId);
+    setDragOverLtvRowId(null);
+  }, []);
+
+  const handleEnterLtvRowDrag = useCallback(
+    (rowId: string) => {
+      if (draggedLtvRowId == null || draggedLtvRowId === rowId) {
+        return;
+      }
+
+      setDragOverLtvRowId(rowId);
+    },
+    [draggedLtvRowId]
+  );
+
+  const handleDropLtvRow = useCallback(
+    (targetRowId: string) => {
+      if (draggedLtvRowId == null) {
+        return;
+      }
+
+      setLtvNormalizedRows((previous) =>
+        moveLtvEditorRow(previous, draggedLtvRowId, targetRowId)
+      );
+      setDraggedLtvRowId(null);
+      setDragOverLtvRowId(null);
+    },
+    [draggedLtvRowId]
+  );
+
+  const handleCancelLtvRowDrag = useCallback(() => {
+    setDraggedLtvRowId(null);
+    setDragOverLtvRowId(null);
+  }, []);
+
+  const handleImportLtvAdifRow = useCallback((row: LtvEditorRow) => {
+    setLtvNormalizedRows((previous) => {
+      if (previous.some((existingRow) => existingRow.id === row.id)) {
+        return previous;
+      }
+
+      return [
+        ...previous,
+        {
+          ...row,
+          origin: "adif",
+          status: "added",
+        },
+      ];
+    });
+  }, []);
+
+  const buildCurrentLtvNormalizedPayload = useCallback(() => {
+    const payload = buildLtvNormalizedFile(ltvNormalizedRows, ltvAdifMeta);
+
+    if (ltvAdifRows.length > 0 && payload.rows.length < ltvAdifRows.length) {
+      return {
+        ...payload,
+        warnings: [
+          ...payload.warnings,
+          `Le tableau normalisé contient ${payload.rows.length} LTV, alors que le tableau ADIF Barcelona/Figueras en contient ${ltvAdifRows.length}.`,
+        ],
+      };
+    }
+
+    return payload;
+  }, [ltvAdifMeta, ltvAdifRows.length, ltvNormalizedRows]);
+
+  const handlePublishLtvNormalizedJson = useCallback(async () => {
+    if (isPublishing) {
+      return;
+    }
+
+    const payload = buildCurrentLtvNormalizedPayload();
+    const warningText =
+      payload.warnings.length > 0
+        ? `\n\nAlertes non bloquantes :\n- ${payload.warnings.join("\n- ")}`
+        : "";
+
+    const confirmed = window.confirm(
+      `Publier le fichier LTV normalisé ?\n\n${payload.rows.length} LTV seront publiées dans LIM Editor et dans LIM2.${warningText}\n\nLa mise à jour peut nécessiter quelques minutes avant d’être visible sur les versions en ligne.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsPublishing(true);
+    setExportStatus("idle");
+    setExportMessage("Publication LTV en cours...");
+    setExportDiagnostics([]);
+
+    try {
+      const response = await publishLtvNormalizedData(payload);
+
+      setLtvNormalizedRows(payload.rows);
+      setExportStatus("success");
+      setExportMessage(
+        `Publication LTV réussie : ${response.diagnostic.rowCount} LTV publiée${
+          response.diagnostic.rowCount > 1 ? "s" : ""
+        } dans LIM Editor et LIM2.`
+      );
+      setExportDiagnostics([
+        `Fichier JSON LTV publié dans LIM Editor : ${response.diagnostic.publishedJsonPath}`,
+        `Fichier JSON LTV publié dans LIM2 : ${response.diagnostic.publishedLim2JsonPath}`,
+        `Date de publication : ${response.diagnostic.publishedAt}`,
+        response.diagnostic.warnings.length > 0
+          ? `Alertes non bloquantes : ${response.diagnostic.warnings.join(" | ")}`
+          : "Aucune alerte non bloquante.",
+      ]);
+    } catch (error) {
+      setExportStatus("error");
+      setExportMessage(
+        error instanceof Error
+          ? `Publication LTV échouée : ${error.message}`
+          : "Publication LTV échouée : erreur inconnue."
+      );
+      setExportDiagnostics([
+        "Le fichier LTV normalisé en service n’a pas été remplacé tant que la publication n’a pas abouti.",
+      ]);
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [buildCurrentLtvNormalizedPayload, isPublishing]);
+
+  const handleDownloadLtvNormalizedJson = useCallback(() => {
+    const payload = buildCurrentLtvNormalizedPayload();
+
+    downloadTextFile(
+      "ltv.normalized.json",
+      JSON.stringify(payload, null, 2),
+      "application/json;charset=utf-8"
+    );
+  }, [buildCurrentLtvNormalizedPayload]);
+
   const handleDownloadNormalizedFile = useCallback(() => {
     const validation = validateNormalizedFtSource(parsedSource);
 
@@ -3424,6 +4502,279 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
       );
     }
   }, [parsedSource]);
+
+  const renderLtvTextCell = useCallback(
+    (row: LtvEditorRow, field: LtvEditorTextField) => {
+      const background =
+        row.origin === "adif" && row.editedFields?.[field]
+          ? "#eff6ff"
+          : getLtvNormalizedRowBackground(row);
+
+      return (
+        <td
+          key={`${row.id}-${field}`}
+          style={{
+            border: "1px solid #d1d5db",
+            padding: 0,
+            background,
+            verticalAlign: "top",
+          }}
+        >
+          <textarea
+            inputMode={getLtvInputMode(field)}
+            value={row[field]}
+            onChange={(event) =>
+              handleUpdateLtvTextField(row.id, field, event.target.value)
+            }
+            rows={2}
+            style={{
+              width: "100%",
+              minHeight: 48,
+              boxSizing: "border-box",
+              border: "none",
+              padding: "8px 6px",
+              background: "transparent",
+              color: "#111827",
+              font: "inherit",
+              outline: "none",
+              resize: "vertical",
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+            }}
+          />
+        </td>
+      );
+    },
+    [handleUpdateLtvTextField]
+  );
+
+  const renderLtvFlagCell = useCallback(
+    (row: LtvEditorRow, field: LtvEditorFlagField) => {
+      const isChecked = row[field];
+      const background =
+        row.origin === "adif" && row.editedFields?.[field]
+          ? "#eff6ff"
+          : getLtvNormalizedRowBackground(row);
+
+      return (
+        <td
+          key={`${row.id}-${field}`}
+          style={{
+            border: "1px solid #d1d5db",
+            padding: 0,
+            background,
+            verticalAlign: "middle",
+            textAlign: "center",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => handleToggleLtvFlagField(row.id, field)}
+            aria-pressed={isChecked}
+            title="Cliquer, ou utiliser Entrée/Espace au clavier, pour cocher ou décocher"
+            style={{
+              width: "100%",
+              minHeight: 32,
+              border: "none",
+              background: "transparent",
+              color: isChecked ? "#047857" : "#9ca3af",
+              font: "inherit",
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            {isChecked ? "✓" : ""}
+          </button>
+        </td>
+      );
+    },
+    [handleToggleLtvFlagField]
+  );
+
+  const renderLtvReadonlyTextCell = useCallback(
+    (
+      row: LtvEditorRow,
+      field: LtvEditorTextField,
+      options: { background?: string; color?: string } = {}
+    ) => (
+      <td
+        key={`${row.id}-${field}`}
+        style={{
+          border: "1px solid #d1d5db",
+          padding: "8px 6px",
+          background: options.background ?? "#ffffff",
+          color: options.color ?? "#111827",
+          verticalAlign: "top",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}
+      >
+        {row[field]}
+      </td>
+    ),
+    []
+  );
+
+  const renderLtvReadonlyFlagCell = useCallback(
+    (
+      row: LtvEditorRow,
+      field: LtvEditorFlagField,
+      options: {
+        background?: string;
+        checkedColor?: string;
+        uncheckedColor?: string;
+      } = {}
+    ) => (
+      <td
+        key={`${row.id}-${field}`}
+        style={{
+          border: "1px solid #d1d5db",
+          padding: "8px 6px",
+          background: options.background ?? "#ffffff",
+          color: row[field]
+            ? options.checkedColor ?? "#1d4ed8"
+            : options.uncheckedColor ?? "#9ca3af",
+          verticalAlign: "middle",
+          textAlign: "center",
+          fontWeight: 800,
+        }}
+      >
+        {row[field] ? "✓" : ""}
+      </td>
+    ),
+    []
+  );
+
+  const renderLtvReadonlyTableRows = useCallback(
+    (
+      rows: LtvEditorRow[],
+      emptyMessage: string,
+      isError = false,
+      allowImport = false
+    ) =>
+      rows.length === 0 ? (
+        <tr>
+          <td
+            colSpan={18}
+            style={{
+              border: "1px solid #d1d5db",
+              padding: 18,
+              textAlign: "center",
+              color: isError ? "#991b1b" : "#6b7280",
+              background: isError ? "#fef2f2" : "#ffffff",
+              fontWeight: 500,
+            }}
+          >
+            {emptyMessage}
+          </td>
+        </tr>
+      ) : (
+        rows.map((row) => {
+          const isAlreadyImported = importedLtvIdSet.has(row.id);
+          const cellBackground = isAlreadyImported ? "#f9fafb" : "#ffffff";
+          const textColor = isAlreadyImported ? "#6b7280" : "#111827";
+
+          return (
+            <tr
+              key={row.id}
+              style={{
+                opacity: isAlreadyImported ? 0.7 : 1,
+              }}
+            >
+              <td
+                key={`${row.id}-adif-empty-action`}
+                style={{
+                  width: 64,
+                  border: "1px solid #d1d5db",
+                  padding: 0,
+                  background: cellBackground,
+                  verticalAlign: "middle",
+                  textAlign: "center",
+                }}
+              />
+
+              <td
+                key={`${row.id}-adif-import`}
+                style={{
+                  width: 48,
+                  border: "1px solid #d1d5db",
+                  padding: 0,
+                  background: cellBackground,
+                  verticalAlign: "middle",
+                  textAlign: "center",
+                }}
+              >
+                {allowImport ? (
+                  isAlreadyImported ? null : (
+                    <button
+                      type="button"
+                      onClick={() => handleImportLtvAdifRow(row)}
+                      title="Importer cette LTV dans le tableau normalisé"
+                      style={{
+                        width: "100%",
+                        minHeight: 32,
+                        border: "none",
+                        background: "transparent",
+                        color: "#16a34a",
+                        fontSize: 18,
+                        fontWeight: 900,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ↑
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    title="Import non disponible ici pour l’instant"
+                    style={{
+                      width: "100%",
+                      minHeight: 32,
+                      border: "none",
+                      background: "transparent",
+                      color: "#9ca3af",
+                      fontSize: 18,
+                      fontWeight: 900,
+                      cursor: "not-allowed",
+                    }}
+                  >
+                    ↑
+                  </button>
+                )}
+              </td>
+
+              {LTV_TEXT_FIELDS_BEFORE_FLAGS.map((field) =>
+                renderLtvReadonlyTextCell(row, field, {
+                  background: cellBackground,
+                  color: textColor,
+                })
+              )}
+
+              {LTV_FLAG_FIELDS.map((field) =>
+                renderLtvReadonlyFlagCell(row, field, {
+                  background: cellBackground,
+                  checkedColor: isAlreadyImported ? "#6b7280" : "#1d4ed8",
+                  uncheckedColor: "#9ca3af",
+                })
+              )}
+
+              {renderLtvReadonlyTextCell(row, "observaciones", {
+                background: cellBackground,
+                color: textColor,
+              })}
+            </tr>
+          );
+        })
+      ),
+    [
+      handleImportLtvAdifRow,
+      importedLtvIdSet,
+      renderLtvReadonlyFlagCell,
+      renderLtvReadonlyTextCell,
+    ]
+  );
 
   return (
     <>
@@ -3921,6 +5272,137 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         </div>
       ) : null}
 
+      {pendingLtvDeleteRow ? (
+        <div
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCancelDeleteLtvNormalizedRow();
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1500,
+            padding: 24,
+          }}
+        >
+          <div
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              background: "#ffffff",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                marginBottom: 16,
+                color: "#111827",
+              }}
+            >
+              Supprimer une LTV
+            </div>
+
+            <div
+              style={{
+                color: "#111827",
+                lineHeight: 1.5,
+                marginBottom: 16,
+              }}
+            >
+              Voulez-vous supprimer cette LTV normalisée ?
+            </div>
+
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                background: "#f9fafb",
+                color: "#374151",
+                marginBottom: 20,
+                lineHeight: 1.5,
+              }}
+            >
+              <div>
+                <strong>CÓDIGO LTV :</strong>{" "}
+                {pendingLtvDeleteRow.code.trim() !== ""
+                  ? pendingLtvDeleteRow.code
+                  : "—"}
+              </div>
+              <div>
+                <strong>Trayecto / Estación :</strong>{" "}
+                {pendingLtvDeleteRow.section.trim() !== ""
+                  ? pendingLtvDeleteRow.section
+                  : "—"}
+              </div>
+              <div>
+                <strong>Km :</strong>{" "}
+                {pendingLtvDeleteRow.kmIni.trim() !== ""
+                  ? pendingLtvDeleteRow.kmIni
+                  : "—"}{" "}
+                →{" "}
+                {pendingLtvDeleteRow.kmFin.trim() !== ""
+                  ? pendingLtvDeleteRow.kmFin
+                  : "—"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleCancelDeleteLtvNormalizedRow}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#111827",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Annuler
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDeleteLtvNormalizedRow}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #dc2626",
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <EditorShell
         toolbar={
           <div
@@ -4387,19 +5869,571 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
             ) : (
               <div
                 style={{
-                  padding: 24,
-                  border: "1px dashed #9ca3af",
-                  borderRadius: 16,
-                  background: "#ffffff",
-                  color: "#4b5563",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
                 }}
               >
                 <div
-                  style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}
+                  style={{
+                    padding: 16,
+                    border: "1px solid #d1d5db",
+                    borderRadius: 16,
+                    background: "#ffffff",
+                    color: "#111827",
+                  }}
                 >
-                  LTV
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 700,
+                          marginBottom: 4,
+                        }}
+                      >
+                        Tableau LTV normalisé
+                      </div>
+                      <div
+                        style={{
+                          color:
+                            ltvNormalizedStatus === "error"
+                              ? "#991b1b"
+                              : ltvNormalizedStatus === "success"
+                                ? "#166534"
+                                : "#4b5563",
+                          fontSize: 14,
+                          fontWeight:
+                            ltvNormalizedStatus === "error" ? 600 : 400,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <div>
+                          {ltvNormalizedMessage}
+                          {ltvNormalizedFileInfo ? (
+                            <>
+                              {" "}
+                              Publié le{" "}
+                              {formatLtvDateTimeForDisplay(
+                                ltvNormalizedFileInfo.publishedAt
+                              )}
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #d1d5db",
+                          background: "#f9fafb",
+                          color: "#374151",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }}
+                      >
+                        {ltvNormalizedRows.length} LTV normalisée
+                        {ltvNormalizedRows.length > 1 ? "s" : ""}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAddLtvNormalizedRow}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 10,
+                          border: "1px solid #2563eb",
+                          background: "#2563eb",
+                          color: "#ffffff",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Ajouter une LTV
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ overflowX: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        minWidth: 1380,
+                        borderCollapse: "collapse",
+                        tableLayout: "fixed",
+                        fontSize: 13,
+                      }}
+                    >
+                      <thead>
+                        <tr>
+                          <th
+                            style={{
+                              width: 64,
+                              border: "1px solid #d1d5db",
+                              background: "#f3f4f6",
+                              color: "#111827",
+                              padding: "8px 6px",
+                              textAlign: "center",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            —
+                          </th>
+
+                          <th
+                            style={{
+                              width: 48,
+                              border: "1px solid #d1d5db",
+                              background: "#f3f4f6",
+                              color: "#111827",
+                              padding: "8px 6px",
+                              textAlign: "center",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            ↕
+                          </th>
+
+                          {LTV_TABLE_HEADERS.map((header) => (
+                            <th
+                              key={header}
+                              style={{
+                                border: "1px solid #d1d5db",
+                                background: "#f3f4f6",
+                                color: "#111827",
+                                padding: "8px 6px",
+                                textAlign: "left",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {ltvNormalizedRows.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={18}
+                              style={{
+                                border: "1px solid #d1d5db",
+                                padding: 18,
+                                textAlign: "center",
+                                color: "#6b7280",
+                                background: "#ffffff",
+                                fontWeight: 500,
+                              }}
+                            >
+                              Aucune LTV normalisée pour le moment.
+                            </td>
+                          </tr>
+                        ) : (
+                          ltvNormalizedRows.map((row) => {
+                            const isDragged = draggedLtvRowId === row.id;
+                            const isDragTarget =
+                              dragOverLtvRowId === row.id &&
+                              draggedLtvRowId !== row.id;
+                            const normalizedRowBackground =
+                              getLtvNormalizedRowBackground(row);
+
+                            return (
+                              <tr
+                                key={row.id}
+                                onDragOver={(event) => {
+                                  if (draggedLtvRowId == null) {
+                                    return;
+                                  }
+
+                                  event.preventDefault();
+                                  event.dataTransfer.dropEffect = "move";
+                                  handleEnterLtvRowDrag(row.id);
+                                }}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  handleDropLtvRow(row.id);
+                                }}
+                                style={{
+                                  opacity: isDragged ? 0.55 : 1,
+                                  outline: isDragTarget
+                                    ? "2px solid #2563eb"
+                                    : "none",
+                                  outlineOffset: -2,
+                                }}
+                              >
+                                <td
+                                  key={`${row.id}-actions`}
+                                  style={{
+                                    width: 64,
+                                    border: "1px solid #d1d5db",
+                                    padding: 0,
+                                    background: normalizedRowBackground,
+                                    verticalAlign: "middle",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleRequestDeleteLtvNormalizedRow(row.id)
+                                    }
+                                    title="Supprimer cette LTV"
+                                    style={{
+                                      width: "100%",
+                                      minHeight: 32,
+                                      border: "none",
+                                      background: "transparent",
+                                      color: "#dc2626",
+                                      fontSize: 18,
+                                      fontWeight: 900,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </td>
+
+                                <td
+                                  key={`${row.id}-drag-handle`}
+                                  style={{
+                                    width: 48,
+                                    border: "1px solid #d1d5db",
+                                    padding: 0,
+                                    background: normalizedRowBackground,
+                                    verticalAlign: "middle",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  <div
+                                    draggable
+                                    onDragStart={(event) => {
+                                      event.dataTransfer.effectAllowed = "move";
+                                      event.dataTransfer.setData(
+                                        "text/plain",
+                                        row.id
+                                      );
+                                      handleStartLtvRowDrag(row.id);
+                                    }}
+                                    onDragEnd={handleCancelLtvRowDrag}
+                                    title="Déplacer cette LTV"
+                                    style={{
+                                      width: "100%",
+                                      minHeight: 32,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      background: "transparent",
+                                      color: "#6b7280",
+                                      fontSize: 18,
+                                      fontWeight: 900,
+                                      cursor: isDragged ? "grabbing" : "grab",
+                                      userSelect: "none",
+                                    }}
+                                  >
+                                    ⋮⋮
+                                  </div>
+                                </td>
+
+                                {LTV_TEXT_FIELDS_BEFORE_FLAGS.map((field) =>
+                                  renderLtvTextCell(row, field)
+                                )}
+
+                                {LTV_FLAG_FIELDS.map((field) =>
+                                  renderLtvFlagCell(row, field)
+                                )}
+
+                                {renderLtvTextCell(row, "observaciones")}
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div>Onglet créé. Contenu à venir.</div>
+
+                <div
+                  style={{
+                    padding: 16,
+                    border: "1px solid #d1d5db",
+                    borderRadius: 16,
+                    background: "#ffffff",
+                    color: "#111827",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 700,
+                          marginBottom: 4,
+                        }}
+                      >
+                        Tableau LTV ADIF — Barcelona/Figueras
+                      </div>
+                      <div
+                        style={{
+                          color:
+                            ltvAdifStatus === "error"
+                              ? "#991b1b"
+                              : ltvAdifStatus === "success"
+                                ? "#166534"
+                                : "#4b5563",
+                          fontSize: 14,
+                          fontWeight: ltvAdifStatus === "error" ? 600 : 400,
+                        }}
+                      >
+                        {ltvAdifMessage}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        border: "1px solid #d1d5db",
+                        background: "#f9fafb",
+                        color: "#374151",
+                        fontWeight: 700,
+                        fontSize: 13,
+                      }}
+                    >
+                      {ltvAdifRows.length} LTV ADIF
+                    </div>
+                  </div>
+
+                  <div style={{ overflowX: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        minWidth: 1380,
+                        borderCollapse: "collapse",
+                        tableLayout: "fixed",
+                        fontSize: 13,
+                      }}
+                    >
+                      <thead>
+                        <tr>
+                          <th
+                            style={{
+                              width: 64,
+                              border: "1px solid #d1d5db",
+                              background: "#f3f4f6",
+                              color: "#111827",
+                              padding: "8px 6px",
+                              textAlign: "center",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {" "}
+                          </th>
+
+                          <th
+                            style={{
+                              width: 48,
+                              border: "1px solid #d1d5db",
+                              background: "#f3f4f6",
+                              color: "#111827",
+                              padding: "8px 6px",
+                              textAlign: "center",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            ↑
+                          </th>
+
+                          {LTV_TABLE_HEADERS.map((header) => (
+                            <th
+                              key={`adif-${header}`}
+                              style={{
+                                border: "1px solid #d1d5db",
+                                background: "#f3f4f6",
+                                color: "#111827",
+                                padding: "8px 6px",
+                                textAlign: "left",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {renderLtvReadonlyTableRows(
+                          ltvAdifRows,
+                          ltvAdifStatus === "loading"
+                            ? "Chargement des LTV ADIF..."
+                            : ltvAdifStatus === "error"
+                              ? ltvAdifMessage
+                              : `Aucune LTV ADIF ligne ${LTV_ADIF_REFERENCE_LINE} Barcelona/Figueras chargée pour le moment.`,
+                          ltvAdifStatus === "error",
+                          true
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: 16,
+                    border: "1px solid #d1d5db",
+                    borderRadius: 16,
+                    background: "#ffffff",
+                    color: "#111827",
+                    opacity: 0.9,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 700,
+                          marginBottom: 4,
+                        }}
+                      >
+                        Autres LTV ADIF ligne {LTV_ADIF_REFERENCE_LINE}
+                      </div>
+                      <div style={{ color: "#4b5563", fontSize: 14 }}>
+                        LTV ADIF hors section Barcelona/Figueras. Tableau de
+                        contrôle, import non fonctionnel pour l’instant.
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        border: "1px solid #d1d5db",
+                        background: "#f9fafb",
+                        color: "#374151",
+                        fontWeight: 700,
+                        fontSize: 13,
+                      }}
+                    >
+                      {ltvAdifOtherRows.length} autre
+                      {ltvAdifOtherRows.length > 1 ? "s" : ""} LTV ADIF
+                    </div>
+                  </div>
+
+                  <div style={{ overflowX: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        minWidth: 1380,
+                        borderCollapse: "collapse",
+                        tableLayout: "fixed",
+                        fontSize: 13,
+                      }}
+                    >
+                      <thead>
+                        <tr>
+                          <th
+                            style={{
+                              width: 64,
+                              border: "1px solid #d1d5db",
+                              background: "#f3f4f6",
+                              color: "#111827",
+                              padding: "8px 6px",
+                              textAlign: "center",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {" "}
+                          </th>
+
+                          <th
+                            style={{
+                              width: 48,
+                              border: "1px solid #d1d5db",
+                              background: "#f3f4f6",
+                              color: "#111827",
+                              padding: "8px 6px",
+                              textAlign: "center",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            ↑
+                          </th>
+
+                          {LTV_TABLE_HEADERS.map((header) => (
+                            <th
+                              key={`adif-other-${header}`}
+                              style={{
+                                border: "1px solid #d1d5db",
+                                background: "#f3f4f6",
+                                color: "#111827",
+                                padding: "8px 6px",
+                                textAlign: "left",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {renderLtvReadonlyTableRows(
+                          ltvAdifOtherRows,
+                          `Aucune autre LTV ADIF ligne ${LTV_ADIF_REFERENCE_LINE} chargée pour le moment.`
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </>
@@ -5226,15 +7260,268 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
             <div
               style={{
                 padding: 20,
-                border: "1px dashed #d1d5db",
+                border: "1px solid #d1d5db",
                 borderRadius: 16,
-                color: "#4b5563",
+                background: "#ffffff",
+                color: "#111827",
               }}
             >
+              <button
+                type="button"
+                onClick={handlePublishLtvNormalizedJson}
+                disabled={isPublishing}
+                title="Publier le fichier ltv.normalized.json dans LIM Editor et LIM2"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #2563eb",
+                  background: isPublishing ? "#93c5fd" : "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: 800,
+                  cursor: isPublishing ? "not-allowed" : "pointer",
+                  opacity: isPublishing ? 0.75 : 1,
+                  marginBottom: 20,
+                }}
+              >
+                {isPublishing ? "Publication en cours..." : "Publier les LTV"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadLtvNormalizedJson}
+                title="Télécharger localement le fichier ltv.normalized.json généré depuis le tableau normalisé"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#111827",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  marginBottom: 20,
+                }}
+              >
+                Télécharger le JSON LTV
+              </button>
+
               <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
-                Panneau latéral
+                Contrôle LTV
               </div>
-              <div>Aucun panneau spécifique pour cet onglet pour le moment.</div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  marginBottom: 20,
+                }}
+              >
+                <div
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "#6b7280",
+                      marginBottom: 4,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Tableau normalisé
+                  </div>
+                  <div style={{ fontSize: 22, fontWeight: 800 }}>
+                    {ltvNormalizedRows.length} LTV
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "#6b7280",
+                      marginBottom: 4,
+                      fontWeight: 700,
+                    }}
+                  >
+                    ADIF Barcelona/Figueras
+                  </div>
+                  <div style={{ fontSize: 22, fontWeight: 800 }}>
+                    {ltvAdifRows.length} LTV
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "#6b7280",
+                      marginBottom: 4,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Autres LTV ADIF
+                  </div>
+                  <div style={{ fontSize: 22, fontWeight: 800 }}>
+                    {ltvAdifOtherRows.length} LTV
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  border:
+                    ltvNormalizedStatus === "error"
+                      ? "1px solid #fecaca"
+                      : ltvNormalizedStatus === "success"
+                        ? "1px solid #bbf7d0"
+                        : "1px solid #d1d5db",
+                  background:
+                    ltvNormalizedStatus === "error"
+                      ? "#fef2f2"
+                      : ltvNormalizedStatus === "success"
+                        ? "#f0fdf4"
+                        : "#f9fafb",
+                  color:
+                    ltvNormalizedStatus === "error"
+                      ? "#991b1b"
+                      : ltvNormalizedStatus === "success"
+                        ? "#166534"
+                        : "#374151",
+                  lineHeight: 1.5,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  marginBottom: 12,
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 800,
+                    marginBottom: 6,
+                  }}
+                >
+                  Fichier normalisé actif
+                </div>
+
+                <div>{ltvNormalizedMessage}</div>
+
+                {ltvNormalizedFileInfo ? (
+                  <div style={{ marginTop: 6 }}>
+                    Publié le{" "}
+                    {formatLtvDateTimeForDisplay(
+                      ltvNormalizedFileInfo.publishedAt
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  border:
+                    ltvAdifStatus === "error"
+                      ? "1px solid #fecaca"
+                      : ltvAdifStatus === "success"
+                        ? "1px solid #bbf7d0"
+                        : "1px solid #d1d5db",
+                  background:
+                    ltvAdifStatus === "error"
+                      ? "#fef2f2"
+                      : ltvAdifStatus === "success"
+                        ? "#f0fdf4"
+                        : "#f9fafb",
+                  color:
+                    ltvAdifStatus === "error"
+                      ? "#991b1b"
+                      : ltvAdifStatus === "success"
+                        ? "#166534"
+                        : "#374151",
+                  lineHeight: 1.5,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  marginBottom: 12,
+                }}
+              >
+                {ltvAdifMessage}
+              </div>
+
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  border:
+                    exportStatus === "error"
+                      ? "1px solid #fecaca"
+                      : exportStatus === "success"
+                        ? "1px solid #bbf7d0"
+                        : "1px solid #d1d5db",
+                  background:
+                    exportStatus === "error"
+                      ? "#fef2f2"
+                      : exportStatus === "success"
+                        ? "#f0fdf4"
+                        : "#f9fafb",
+                  color:
+                    exportStatus === "error"
+                      ? "#991b1b"
+                      : exportStatus === "success"
+                        ? "#166534"
+                        : "#374151",
+                  lineHeight: 1.5,
+                  fontSize: 14,
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 800,
+                    marginBottom: 6,
+                  }}
+                >
+                  État publication LTV
+                </div>
+
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                  {exportMessage}
+                </div>
+
+                {exportDiagnostics.length > 0 ? (
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 18,
+                    }}
+                  >
+                    {exportDiagnostics.map((diagnostic) => (
+                      <li key={diagnostic}>{diagnostic}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div>Aucun diagnostic de publication LTV disponible.</div>
+                )}
+              </div>
             </div>
           )
         }

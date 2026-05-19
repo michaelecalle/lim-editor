@@ -6,6 +6,10 @@ export const LIM2_ACTIVE_FILE_PATH = "src/data/normalized/ligneFT.normalized.ts"
 
 export const LIM2_ACTIVE_JSON_FILE_PATH = "src/data/ligneFT.normalized.json";
 
+export const ACTIVE_LTV_JSON_FILE_PATH = "src/data/ltv.normalized.json";
+
+export const LIM2_ACTIVE_LTV_JSON_FILE_PATH = "src/data/ltv.normalized.json";
+
 export const ARCHIVES_DIR_PATH = "src/data/archives/ligneft";
 
 export const MAX_ARCHIVES = 10;
