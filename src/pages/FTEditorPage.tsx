@@ -1080,12 +1080,22 @@ function formatLtvDecimalKmInput(value: string): string {
   return `${integerPart}.${decimalPart}`;
 }
 
+function normalizeLtvCode(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 9);
+
+  if (digits === "") {
+    return "";
+  }
+
+  return digits.padStart(9, "0");
+}
+
 function formatLtvTextInput(
   field: LtvEditorTextField,
   value: string
 ): string {
   if (field === "code") {
-    return value.replace(/\D/g, "");
+    return value.replace(/\D/g, "").slice(0, 9);
   }
 
   if (field === "kmIni" || field === "kmFin") {
@@ -1337,6 +1347,7 @@ function buildLtvNormalizedFile(
     .filter((row) => !isLtvRowCompletelyEmpty(row))
     .map((row): LtvEditorRow => ({
       ...row,
+      code: normalizeLtvCode(row.code),
       origin: row.origin === "adif" ? "adif" : "manual",
       status: "unchanged",
     }));
@@ -1356,7 +1367,13 @@ function readLtvTextField(
   value: unknown,
   field: LtvEditorTextField
 ): string {
-  return formatLtvTextInput(field, typeof value === "string" ? value : "");
+  const textValue = typeof value === "string" ? value : "";
+
+  if (field === "code") {
+    return normalizeLtvCode(textValue);
+  }
+
+  return formatLtvTextInput(field, textValue);
 }
 
 function readLtvFlagField(value: unknown): boolean {
@@ -4281,6 +4298,35 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     []
   );
 
+  const handleNormalizeLtvCodeField = useCallback((rowId: string) => {
+    setLtvNormalizedRows((previous) =>
+      previous.map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+
+        const normalizedCode = normalizeLtvCode(row.code);
+
+        if (normalizedCode === row.code) {
+          return row;
+        }
+
+        return {
+          ...row,
+          code: normalizedCode,
+          status: row.status === "added" ? "added" : "modified",
+          editedFields:
+            row.origin === "adif"
+              ? {
+                  ...row.editedFields,
+                  code: true,
+                }
+              : row.editedFields,
+        };
+      })
+    );
+  }, []);
+
   const handleToggleLtvFlagField = useCallback(
     (rowId: string, field: LtvEditorFlagField) => {
       setLtvNormalizedRows((previous) =>
@@ -4377,6 +4423,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         ...previous,
         {
           ...row,
+          code: normalizeLtvCode(row.code),
           origin: "adif",
           status: "added",
         },
@@ -4526,6 +4573,11 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
             onChange={(event) =>
               handleUpdateLtvTextField(row.id, field, event.target.value)
             }
+            onBlur={() => {
+              if (field === "code") {
+                handleNormalizeLtvCodeField(row.id);
+              }
+            }}
             rows={2}
             style={{
               width: "100%",
@@ -4545,7 +4597,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         </td>
       );
     },
-    [handleUpdateLtvTextField]
+    [handleNormalizeLtvCodeField, handleUpdateLtvTextField]
   );
 
   const renderLtvFlagCell = useCallback(
