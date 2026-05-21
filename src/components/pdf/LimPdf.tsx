@@ -11,6 +11,11 @@ Font.register({
       src: "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf",
       fontWeight: "bold",
     },
+    {
+      src: "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-BoldOblique.ttf",
+      fontWeight: "bold",
+      fontStyle: "italic",
+    },
   ],
 });
 import PdfBlocInfo from "./PdfBlocInfo";
@@ -33,6 +38,7 @@ export type PdfFtRow = {
   etcs: string;
   csv: boolean;
   notes: string[];
+  ltvNote: string;
   // champs calculés pour le rendu
   showBloqueo: boolean;
   showBloqueoBar: boolean;
@@ -50,6 +56,7 @@ export type PdfFtRow = {
   showRcText: boolean;
   rampCaractTextBelow: string;
   highlight: boolean;
+  pkInterne: string; // PK interne monotone (pour le matching LTV)
 };
 
 export type PdfLtvRow = {

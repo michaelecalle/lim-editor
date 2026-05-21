@@ -1817,6 +1817,8 @@ export default function FTEditorPage() {
         etcs: row.visible.etcs,
         csv: row.technical.csv ?? false,
         notes: row.visible.noteDisplay ? [row.visible.noteDisplay] : [],
+        ltvNote: "",
+        pkInterne: row.visible.pkInternalDisplay,
       };
     });
 
@@ -2028,6 +2030,82 @@ export default function FTEditorPage() {
       observaciones: r.observaciones,
     }));
   }, [ltvNormalizedRows]);
+
+  const exportFtRowsFinal = useMemo((): PdfFtRow[] => {
+    const parsePk = (s: string): number | null => {
+      const n = parseFloat(s.replace(",", ".").trim());
+      return isNaN(n) ? null : n;
+    };
+
+    const isIncreasing = exportDirection === "SUD_NORD";
+
+    // Lignes de données uniquement, avec leur PK parsé
+    // On utilise pkInterne (PK interne monotone : croissant SUD_NORD, décroissant NORD_SUD
+    // après inversion) plutôt que sitKm (effectivePk) qui prend le min de tous les réseaux
+    // et donne des valeurs incohérentes pour les stations trans-réseaux (ex. LIMITE ADIF).
+    const dataRowPks = exportFtRows
+      .filter((r) => r.type === "data")
+      .map((r) => ({ id: r.id, pk: parsePk(r.pkInterne) }))
+      .filter((r): r is { id: string; pk: number } => r.pk !== null);
+
+    // Association LTV → ligne FT par proximité de PK
+    const ltvNoteMap = new Map<string, string[]>();
+    for (const ltv of exportLtvRows) {
+      const pkIni = parsePk(ltv.kmIni);
+      const pkFin = parsePk(ltv.kmFin);
+      if (pkIni === null || pkFin === null) continue;
+
+      const entryPk = isIncreasing ? Math.min(pkIni, pkFin) : Math.max(pkIni, pkFin);
+
+      let targetId: string | null = null;
+      for (const { id, pk } of dataRowPks) {
+        if (isIncreasing ? pk <= entryPk : pk >= entryPk) targetId = id;
+        else break;
+      }
+      if (!targetId) continue;
+
+      const speed = ltv.speed.trim();
+      // Ordre des PK : croissant pour SUD_NORD, décroissant pour NORD_SUD
+      const [firstPkStr, secondPkStr] =
+        isIncreasing
+          ? pkIni <= pkFin ? [ltv.kmIni, ltv.kmFin] : [ltv.kmFin, ltv.kmIni]
+          : pkIni >= pkFin ? [ltv.kmIni, ltv.kmFin] : [ltv.kmFin, ltv.kmIni];
+      const note = `LTV ${speed} - PK ${firstPkStr} → ${secondPkStr}${ltv.observaciones.trim() ? ` — ${ltv.observaciones.trim()}` : ""}`;
+      if (!ltvNoteMap.has(targetId)) ltvNoteMap.set(targetId, []);
+      ltvNoteMap.get(targetId)!.push(note);
+    }
+
+    let finalRows = exportFtRows.map((row) => ({
+      ...row,
+      ltvNote: ltvNoteMap.get(row.id)?.join("\n") ?? "",
+    }));
+
+    // Pour NORD_SUD, les lignes de remarque rouge (type "note") apparaissent
+    // après la ligne de données qui les précède dans la séquence inversée,
+    // alors qu'elles doivent être AVANT cette ligne (au-dessus dans le PDF).
+    // On remonte chaque note juste avant la dernière ligne de données vue.
+    if (exportDirection === "NORD_SUD") {
+      const reordered: PdfFtRow[] = [];
+      for (const row of finalRows) {
+        if (row.type === "note") {
+          // Trouver l'index de la dernière ligne "data" dans reordered
+          let insertIdx = reordered.length;
+          for (let j = reordered.length - 1; j >= 0; j--) {
+            if (reordered[j].type === "data") {
+              insertIdx = j;
+              break;
+            }
+          }
+          reordered.splice(insertIdx, 0, row);
+        } else {
+          reordered.push(row);
+        }
+      }
+      finalRows = reordered;
+    }
+
+    return finalRows;
+  }, [exportFtRows, exportLtvRows, exportDirection]);
 
   const exportVariantIndex = useMemo(() => {
     if (!exportTrainData || !exportVariant) return -1;
@@ -6543,7 +6621,7 @@ export default function FTEditorPage() {
                       longueur={exportLongueur}
                       masse={exportMasse}
                       ltvRows={exportLtvRows}
-                      ftRows={exportFtRows}
+                      ftRows={exportFtRowsFinal}
                     />
                   </PDFViewer>
                 )}

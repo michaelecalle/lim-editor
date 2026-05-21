@@ -111,6 +111,23 @@ function SepBar() {
   );
 }
 
+function OrangeLine({ text }: { text: string }) {
+  return (
+    <Text
+      style={{
+        fontSize: 5,
+        fontFamily: "DejaVu",
+        fontWeight: "bold",
+        fontStyle: "italic",
+        color: "#f97316",
+        marginTop: 1,
+      }}
+    >
+      {text}
+    </Text>
+  );
+}
+
 function NoteLine({ text }: { text: string }) {
   const spaceIdx = text.indexOf(" ");
   const first = spaceIdx === -1 ? text : text.slice(0, spaceIdx);
@@ -150,7 +167,30 @@ export default function PdfBlocFt({ rows }: Props) {
 
       {/* Lignes de données */}
       {rows.flatMap((row, i) => {
-        if (row.type === "note") return []; // ignoré pour l'instant
+        if (row.type === "note") {
+          const noteLines = row.notes.flatMap((n) =>
+            n.split("\n").filter((l) => l.trim() !== "")
+          );
+          return [
+            <View key={row.id} style={s.intermediateRow}>
+              <View style={[s.cell, { width: W.bloqueo }]} />
+              <View style={[s.cell, { width: W.vmax }]} />
+              <View style={[s.cell, { width: W.sitKm }]} />
+              <View style={[s.cell, { flex: 1 }]}>
+                {noteLines.map((line, idx) => (
+                  <NoteLine key={idx} text={line} />
+                ))}
+              </View>
+              <View style={[s.cell, { width: W.com }]} />
+              <View style={[s.cell, { width: W.hora }]} />
+              <View style={[s.cell, { width: W.tecn }]} />
+              <View style={[s.cell, { width: W.conc }]} />
+              <View style={[s.cell, { width: W.radio }]} />
+              <View style={[s.cell, { width: W.rampCaract }]} />
+              <View style={[s.cellLast, { width: W.etcs }]} />
+            </View>,
+          ];
+        }
 
         const hasNextDataRow = rows.slice(i + 1).some((r) => r.type === "data");
 
@@ -325,7 +365,12 @@ export default function PdfBlocFt({ rows }: Props) {
                     )}
                   </View>
                   <View style={[s.cell, { width: W.sitKm }]} />
-                  <View style={[s.cell, { flex: 1 }]} />
+                  <View style={[s.cell, { flex: 1 }]}>
+                    {row.ltvNote !== "" &&
+                      row.ltvNote.split("\n").map((line, idx) => (
+                        <OrangeLine key={idx} text={line} />
+                      ))}
+                  </View>
                   <View style={[s.cell, { width: W.com }]} />
                   <View style={[s.cell, { width: W.hora }]} />
                   <View style={[s.cell, { width: W.tecn }]} />
