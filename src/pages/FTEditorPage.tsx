@@ -39,9 +39,12 @@ import { publishLtvNormalizedData } from "../modules/ft-editor/api/ltvApi";
 import { HORAIRE_COLUMNS } from "../modules/ft-editor/constants/ftColumns";
 import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRows";
 import { areSourceTablesEqual } from "../modules/ft-editor/utils/areSourceTablesEqual";
+import { PDFViewer } from "@react-pdf/renderer";
+import LimPdf from "../components/pdf/LimPdf";
+import type { PdfFtRow, PdfLtvRow } from "../components/pdf/LimPdf";
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
-type EditorTab = "FT" | "HORAIRE" | "LTV";
+type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT";
 
 type LtvEditorRow = {
   id: string;
@@ -242,6 +245,37 @@ function getDirectionFromTrainNumber(
   }
 
   return parsed % 2 === 0 ? "NORD_SUD" : "SUD_NORD";
+}
+
+function findVariantForDate(
+  trainData: FtSourceTrainData,
+  dateStr: string
+): FtSourceTrainVariantData | null {
+  const date = new Date(dateStr + "T00:00:00");
+  const dayKeys = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ] as const;
+  const dayKey = dayKeys[date.getDay()];
+
+  for (const variant of trainData.variants) {
+    const { normalizedStart, normalizedEnd } = normalizeVariantDateRange(
+      variant.meta.validity.startDate,
+      variant.meta.validity.endDate
+    );
+    if (dateStr >= normalizedStart && dateStr <= normalizedEnd) {
+      if (variant.meta.validity.days[dayKey]) {
+        return variant;
+      }
+    }
+  }
+
+  return trainData.variants[0] ?? null;
 }
 
 function parseHoraToMinutesForConc(value: string): number | null {
@@ -1056,6 +1090,17 @@ function formatLtvTimeInput(value: string): string {
   return `${hours}:${minutes}`;
 }
 
+function normalizeLtvKm(value: string): string {
+  if (value.trim() === "") return "";
+  const dotIndex = value.indexOf(".");
+  if (dotIndex === -1) {
+    return `${value}.000`;
+  }
+  const intPart = value.slice(0, dotIndex);
+  const decPart = value.slice(dotIndex + 1);
+  return `${intPart}.${decPart.padEnd(3, "0")}`;
+}
+
 function formatLtvDecimalKmInput(value: string): string {
   const normalizedValue = value.replace(",", ".").replace(/[^\d.]/g, "");
 
@@ -1173,7 +1218,7 @@ function formatAdifLtvKm(value: number | null | undefined): string {
     return "";
   }
 
-  return formatLtvDecimalKmInput(String(value));
+  return normalizeLtvKm(formatLtvDecimalKmInput(String(value)));
 }
 
 function formatAdifLtvDate(value: number | null | undefined): string {
@@ -1373,7 +1418,13 @@ function readLtvTextField(
     return normalizeLtvCode(textValue);
   }
 
-  return formatLtvTextInput(field, textValue);
+  const formatted = formatLtvTextInput(field, textValue);
+
+  if (field === "kmIni" || field === "kmFin") {
+    return normalizeLtvKm(formatted);
+  }
+
+  return formatted;
 }
 
 function readLtvFlagField(value: unknown): boolean {
@@ -1647,7 +1698,13 @@ export default function FTEditorPage() {
     null
   );
   const [isLigneEditing, setIsLigneEditing] = useState(false);
-const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
+  const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
+  const [exportTrainNumber, setExportTrainNumber] = useState<string>("");
+  const [exportComposition, setExportComposition] = useState<string>("US");
+  const [exportDate, setExportDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [exportVariantOverrideIndex, setExportVariantOverrideIndex] = useState<number | null>(null);
   const [isCategorieEspagneEditing, setIsCategorieEspagneEditing] =
     useState(false);
   const [isCategorieFranceEditing, setIsCategorieFranceEditing] =
@@ -1659,6 +1716,351 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
   );
   const directionLabel = getDirectionLabel(direction);
   const sourceTableLabel = getSourceTableLabel(direction);
+  const horaireDirection: EditorDirection =
+    getDirectionFromTrainNumber(selectedTrainNumber) ?? direction;
+
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const tomorrowIso = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
+  const exportDateFormatted = useMemo(
+    () =>
+      new Date(exportDate + "T00:00:00").toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }),
+    [exportDate]
+  );
+
+  const exportTrainData = useMemo(
+    () => parsedSource.trains?.[exportTrainNumber] ?? null,
+    [parsedSource, exportTrainNumber]
+  );
+
+  const exportAutoVariant = useMemo(() => {
+    if (!exportTrainData) return null;
+    return findVariantForDate(exportTrainData, exportDate);
+  }, [exportTrainData, exportDate]);
+
+  const exportAutoVariantIndex = useMemo(() => {
+    if (!exportTrainData || !exportAutoVariant) return -1;
+    return exportTrainData.variants.indexOf(exportAutoVariant);
+  }, [exportTrainData, exportAutoVariant]);
+
+  const exportVariant = useMemo(() => {
+    if (!exportTrainData) return null;
+    if (exportVariantOverrideIndex !== null) {
+      return exportTrainData.variants[exportVariantOverrideIndex] ?? exportAutoVariant;
+    }
+    return exportAutoVariant;
+  }, [exportTrainData, exportVariantOverrideIndex, exportAutoVariant]);
+
+  const exportDirection: EditorDirection =
+    getDirectionFromTrainNumber(exportTrainNumber) ?? "SUD_NORD";
+
+  const exportFtRows = useMemo((): PdfFtRow[] => {
+    const allDirRows = getDirectionRows(parsedSource, exportDirection);
+    const origin = exportVariant?.meta.origine?.trim() ?? "";
+    const destination = exportVariant?.meta.destination?.trim() ?? "";
+
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normOrigin = norm(origin);
+    const normDest = norm(destination);
+
+    // Trouver les bornes du parcours parmi les lignes "data" (pas les notes)
+    const startIdx =
+      normOrigin !== ""
+        ? allDirRows.findIndex(
+            (r) => !r.visual.isNoteOnly && norm(r.visible.dependencia.trim()) === normOrigin
+          )
+        : -1;
+
+    let endIdx = -1;
+    if (normDest !== "") {
+      for (let i = allDirRows.length - 1; i >= 0; i--) {
+        if (!allDirRows[i].visual.isNoteOnly && norm(allDirRows[i].visible.dependencia.trim()) === normDest) {
+          endIdx = i;
+          break;
+        }
+      }
+    }
+
+    const dirRows =
+      startIdx >= 0 && endIdx >= startIdx
+        ? allDirRows.slice(startIdx, endIdx + 1)
+        : allDirRows;
+
+    const rawRows = dirRows.map((row) => {
+      const rowData = exportVariant?.byRowKey[row.id] as
+        | FtSourceTrainRowData
+        | undefined;
+      return {
+        id: row.id,
+        type: (row.visual.isNoteOnly ? "note" : "data") as "data" | "note",
+        bloqueo: row.visible.bloqueo,
+        vmax: row.visible.vmax,
+        sitKm: row.visible.pkDisplay,
+        dependencia: row.visible.dependencia,
+        com: rowData?.com ?? row.visible.com ?? "",
+        hora: rowData?.hora ?? row.visible.hora ?? "",
+        tecn: rowData?.tecn ?? row.visible.tecn ?? "",
+        conc: rowData?.conc ?? row.visible.conc ?? "",
+        radio: row.visible.radio,
+        rampCaract: row.visible.rc,
+        etcs: row.visible.etcs,
+        csv: row.technical.csv ?? false,
+        notes: row.visible.noteDisplay ? [row.visible.noteDisplay] : [],
+      };
+    });
+
+    const dataRowsOnly = rawRows.filter((r) => r.type === "data");
+    const dataRowCount = dataRowsOnly.length;
+
+    // Identifier les groupes bloqueo et la ligne qui affiche le texte
+    const bloqueoGroups: { start: number; len: number }[] = [];
+    {
+      let gs = 0;
+      for (let i = 1; i <= dataRowsOnly.length; i++) {
+        if (i === dataRowsOnly.length || dataRowsOnly[i].bloqueo !== dataRowsOnly[i - 1].bloqueo) {
+          bloqueoGroups.push({ start: gs, len: i - gs });
+          gs = i;
+        }
+      }
+    }
+    const bloqueoMiddleIds = new Set<string>();
+    // Groupes d'1 ligne avec barre : le texte va dans la ligne intermédiaire suivante
+    const bloqueoTextBelowMap = new Map<string, string>(); // rowId → texte bloqueo
+    for (const { start, len } of bloqueoGroups) {
+      // Cohérent avec showBloqueoBar : barre si la 1ère ligne du groupe n'est ni la 1ère ni la dernière ligne de données
+      const hasBar = start > 0 && start < dataRowCount - 1;
+      if (hasBar && len === 1) {
+        // La ligne principale a une barre ET est seule → texte dans la ligne intermédiaire
+        bloqueoTextBelowMap.set(dataRowsOnly[start].id, dataRowsOnly[start].bloqueo);
+      } else {
+        // Centrer le texte parmi les lignes disponibles (après la barre si elle existe)
+        const midInGroup = hasBar && len > 1
+          ? 1 + Math.floor((len - 2) / 2)
+          : Math.floor((len - 1) / 2);
+        bloqueoMiddleIds.add(dataRowsOnly[start + midInGroup].id);
+      }
+    }
+    // Groupes radio — même logique que bloqueo
+    const radioGroups: { start: number; len: number }[] = [];
+    {
+      let gs = 0;
+      for (let i = 1; i <= dataRowsOnly.length; i++) {
+        if (i === dataRowsOnly.length || dataRowsOnly[i].radio !== dataRowsOnly[i - 1].radio) {
+          radioGroups.push({ start: gs, len: i - gs });
+          gs = i;
+        }
+      }
+    }
+    const radioMiddleIds = new Set<string>();
+    const radioTextBelowMap = new Map<string, string>();
+    for (const { start, len } of radioGroups) {
+      const hasBar = start > 0 && start < dataRowCount - 1;
+      if (hasBar && len === 1) {
+        radioTextBelowMap.set(dataRowsOnly[start].id, dataRowsOnly[start].radio);
+      } else {
+        const midInGroup = hasBar && len > 1
+          ? 1 + Math.floor((len - 2) / 2)
+          : Math.floor((len - 1) / 2);
+        radioMiddleIds.add(dataRowsOnly[start + midInGroup].id);
+      }
+    }
+
+    // Groupes rampCaract — même logique que bloqueo
+    const rampCaractGroups: { start: number; len: number }[] = [];
+    {
+      let gs = 0;
+      for (let i = 1; i <= dataRowsOnly.length; i++) {
+        if (i === dataRowsOnly.length || dataRowsOnly[i].rampCaract !== dataRowsOnly[i - 1].rampCaract) {
+          rampCaractGroups.push({ start: gs, len: i - gs });
+          gs = i;
+        }
+      }
+    }
+    const rcMiddleIds = new Set<string>();
+    const rcTextBelowMap = new Map<string, string>();
+    for (const { start, len } of rampCaractGroups) {
+      const hasBar = start > 0 && start < dataRowCount - 1;
+      if (hasBar && len === 1) {
+        rcTextBelowMap.set(dataRowsOnly[start].id, dataRowsOnly[start].rampCaract);
+      } else {
+        const midInGroup = hasBar && len > 1
+          ? 1 + Math.floor((len - 2) / 2)
+          : Math.floor((len - 1) / 2);
+        rcMiddleIds.add(dataRowsOnly[start + midInGroup].id);
+      }
+    }
+
+    // Groupes vmax — barre sur la 1ère ligne de chaque groupe sauf le 1er (pas de borne haute)
+    const vmaxGroups: { start: number; len: number }[] = [];
+    {
+      let gs = 0;
+      let lastV = "";
+      for (let i = 0; i < dataRowsOnly.length; i++) {
+        const v = dataRowsOnly[i].vmax;
+        if (i > 0 && v !== "" && v !== lastV) {
+          vmaxGroups.push({ start: gs, len: i - gs });
+          gs = i;
+        }
+        if (i === dataRowsOnly.length - 1) {
+          vmaxGroups.push({ start: gs, len: dataRowsOnly.length - gs });
+        }
+        lastV = v;
+      }
+    }
+    const vmaxBarIds = new Set<string>();
+    const vmaxMiddleIds = new Set<string>();
+    const vmaxTextBelowMap = new Map<string, string>();
+    for (const { start, len } of vmaxGroups) {
+      const hasBar = start > 0;
+      const value = dataRowsOnly[start].vmax;
+      if (hasBar) {
+        vmaxBarIds.add(dataRowsOnly[start].id);
+      }
+      if (hasBar && len === 1) {
+        vmaxTextBelowMap.set(dataRowsOnly[start].id, value);
+      } else {
+        const midInGroup = hasBar && len > 1
+          ? 1 + Math.floor((len - 2) / 2)
+          : Math.floor((len - 1) / 2);
+        vmaxMiddleIds.add(dataRowsOnly[start + midInGroup].id);
+      }
+    }
+
+    // Gares voyageurs (normalisées : minuscules, sans accents, sans caractères non-alphanumériques)
+    const PASSENGER_STATIONS = new Set(["barcelonasants", "girona", "figueresvilafant", "perpignan"]);
+
+    let dataRowIndex = 0;
+
+    let lastBloqueo = "";
+    let lastRadio = "";
+    let lastRampCaract = "";
+    let isFirstDataRow = true;
+
+    return rawRows.map((row) => {
+      const showBloqueo = row.bloqueo !== lastBloqueo;
+      const showRadio = row.radio !== lastRadio;
+      lastBloqueo = row.bloqueo;
+      lastRadio = row.radio;
+
+      let showVBar = false;
+      let showRcBar = false;
+      let showBloqueoBar = false;
+      let showRadioBar = false;
+      let isFirstRow = false;
+      let isLastRow = false;
+
+      if (row.type === "data") {
+        const isFirst = dataRowIndex === 0;
+        const isLast = dataRowIndex === dataRowCount - 1;
+        isFirstRow = isFirst;
+        isLastRow = isLast;
+        showBloqueoBar = showBloqueo && !isFirst && !isLast;
+        showRadioBar = showRadio && !isFirst && !isLast;
+        showRcBar = row.rampCaract !== lastRampCaract && !isFirst && !isLast;
+
+        showVBar = vmaxBarIds.has(row.id);
+        lastRampCaract = row.rampCaract;
+        isFirstDataRow = false;
+        dataRowIndex++;
+      }
+
+      const dep = row.dependencia.trim();
+      /* eslint-disable no-misleading-character-class */
+      const stripAccents = (s: string) => s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      /* eslint-enable no-misleading-character-class */
+      const normDep = stripAccents(dep);
+      const normOrigin = stripAccents(origin);
+      const normDest = stripAccents(destination);
+      const isPassengerStation = PASSENGER_STATIONS.has(normDep);
+      const highlight =
+        row.type === "data" &&
+        ((isFirstRow || isLastRow)
+          ? isPassengerStation
+          : ((row.hora !== "" && (row.com !== "" || row.tecn !== "")) ||
+             (dep !== "" && normOrigin !== "" && normDep === normOrigin) ||
+             (dep !== "" && normDest !== "" && normDep === normDest)));
+
+      const showBloqueoText = bloqueoMiddleIds.has(row.id);
+      const bloqueoTextBelow = bloqueoTextBelowMap.get(row.id) ?? "";
+      const showRadioText = radioMiddleIds.has(row.id);
+      const radioTextBelow = radioTextBelowMap.get(row.id) ?? "";
+      const showRcText = rcMiddleIds.has(row.id);
+      const rampCaractTextBelow = rcTextBelowMap.get(row.id) ?? "";
+      const showVmaxText = vmaxMiddleIds.has(row.id);
+      const vmaxTextBelow = vmaxTextBelowMap.get(row.id) ?? "";
+
+      return { ...row, showBloqueo, showBloqueoBar, showBloqueoText, bloqueoTextBelow, showRadio, showRadioBar, showRadioText, radioTextBelow, showVBar, showVmaxText, vmaxTextBelow, showRcBar, showRcText, rampCaractTextBelow, highlight };
+    });
+  }, [parsedSource, exportDirection, exportVariant]);
+
+  const exportLtvRows = useMemo((): PdfLtvRow[] => {
+    return ltvNormalizedRows.map((r) => ({
+      code: r.code,
+      section: r.section,
+      via: r.via,
+      kmIni: r.kmIni,
+      kmFin: r.kmFin,
+      speed: r.speed,
+      motivo: r.motivo,
+      fecha1: r.fecha1,
+      hora1: r.hora1,
+      fecha2: r.fecha2,
+      hora2: r.hora2,
+      viaCheck: r.viaCheck,
+      sistema: r.sistema,
+      soloCabeza: r.soloCabeza,
+      csv: r.csv,
+      observaciones: r.observaciones,
+    }));
+  }, [ltvNormalizedRows]);
+
+  const exportVariantIndex = useMemo(() => {
+    if (!exportTrainData || !exportVariant) return -1;
+    return exportTrainData.variants.indexOf(exportVariant);
+  }, [exportTrainData, exportVariant]);
+
+  const exportAllVariantInfos = useMemo(() => {
+    if (!exportTrainData) return [];
+    const formatDate = (d: string) => {
+      if (!d) return "∞";
+      const [y, m, day] = d.split("-");
+      return `${day}/${m}/${y}`;
+    };
+    const dayLabels = [
+      { key: "monday" as const, label: "L" },
+      { key: "tuesday" as const, label: "M" },
+      { key: "wednesday" as const, label: "M" },
+      { key: "thursday" as const, label: "J" },
+      { key: "friday" as const, label: "V" },
+      { key: "saturday" as const, label: "S" },
+      { key: "sunday" as const, label: "D" },
+    ];
+    return exportTrainData.variants.map((v, i) => {
+      const { startDate, endDate, days } = v.meta.validity;
+      return {
+        index: i,
+        label: `Variante ${String.fromCharCode(65 + i)}`,
+        dates: `${formatDate(startDate)} → ${formatDate(endDate)}`,
+        days: dayLabels.map((d) => (days[d.key] ? d.label : "·")).join(" "),
+      };
+    });
+  }, [exportTrainData]);
+
+  const exportLongueur =
+    exportComposition === "US" ? 200 : exportComposition === "UM" ? 400 : undefined;
+  const exportMasse =
+    exportComposition === "US" ? 433 : exportComposition === "UM" ? 866 : undefined;
 
   useEffect(() => {
     if (!isCreateTrainModalOpen) {
@@ -1967,6 +2369,10 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     return getDirectionRows(parsedSource, direction);
   }, [parsedSource, direction]);
 
+  const horaireSourceRows = useMemo(() => {
+    return getDirectionRows(parsedSource, horaireDirection);
+  }, [parsedSource, horaireDirection]);
+
   const selectedVariantIndex =
     selectedVariantIndexByTrain[selectedTrainNumber] ?? 0;
 
@@ -1979,7 +2385,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
 
   const horaireRows = useMemo(() => {
     if (!selectedVariant) {
-      return sourceRows.map((row) => ({
+      return horaireSourceRows.map((row) => ({
         ...row,
         visual: {
           ...row.visual,
@@ -2015,7 +2421,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
 
     let previousHoraMinutes: number | null = null;
 
-    return sourceRows.map((row) => {
+    return horaireSourceRows.map((row) => {
       const rowTrainData = selectedVariant.byRowKey[row.id] as
         | FtSourceTrainRowData
         | undefined;
@@ -2068,7 +2474,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         },
       };
     });
-  }, [selectedVariant, sourceRows]);
+  }, [selectedVariant, horaireSourceRows]);
 
   const availableTrainNumbers = useMemo(() => {
     return Object.keys(parsedSource.trains ?? {}).sort((a, b) =>
@@ -2089,12 +2495,12 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     unpublishedTrainNumbers.has(selectedTrainNumber);
 
   const horaireLocationOptions = useMemo(() => {
-    const values = sourceRows
+    const values = horaireSourceRows
       .map((row) => row.visible.dependencia.trim())
       .filter((value) => value !== "");
 
     return Array.from(new Set(values));
-  }, [sourceRows]);
+  }, [horaireSourceRows]);
 
   const displayedHoraireRows = useMemo(() => {
     if (validatedOrigin === "" || validatedDestination === "") {
@@ -2188,11 +2594,9 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     );
   }, [ltvNormalizedRows, pendingLtvDeleteRowId]);
 
-  const importedLtvIdSet = useMemo(() => {
+  const importedLtvCodeSet = useMemo(() => {
     return new Set(
-      ltvNormalizedRows
-        .filter((row) => row.origin === "adif")
-        .map((row) => row.id)
+      ltvNormalizedRows.map((row) => normalizeLtvCode(row.code))
     );
   }, [ltvNormalizedRows]);
 
@@ -2320,6 +2724,21 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
       setSelectedTrainNumber(availableTrainNumbers[0]);
     }
   }, [availableTrainNumbers, selectedTrainNumber]);
+
+  useEffect(() => {
+    if (availableTrainNumbers.length > 0 && exportTrainNumber === "") {
+      setExportTrainNumber(availableTrainNumbers[0]);
+    }
+  }, [availableTrainNumbers, exportTrainNumber]);
+
+  useEffect(() => {
+    setExportVariantOverrideIndex(null);
+  }, [exportDate, exportTrainNumber]);
+
+  useEffect(() => {
+    const comp = exportVariant?.meta.composition?.trim();
+    if (comp) setExportComposition(comp);
+  }, [exportVariant]);
 
   useEffect(() => {
     if (selectedTrainNumber.trim() === "") {
@@ -3368,6 +3787,10 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     selectedVariantIndex,
   ]);
 
+  const handleExportCompositionToggle = useCallback(() => {
+    setExportComposition((prev) => (prev === "US" ? "UM" : "US"));
+  }, []);
+
   const handleAddVariantForSelectedTrain = useCallback(() => {
     const targetTrainNumber = selectedTrainNumber.trim();
 
@@ -4327,6 +4750,31 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
     );
   }, []);
 
+  const handleNormalizeLtvKmField = useCallback(
+    (rowId: string, field: "kmIni" | "kmFin") => {
+      setLtvNormalizedRows((previous) =>
+        previous.map((row) => {
+          if (row.id !== rowId) return row;
+
+          const normalized = normalizeLtvKm(row[field]);
+
+          if (normalized === row[field]) return row;
+
+          return {
+            ...row,
+            [field]: normalized,
+            status: row.status === "added" ? "added" : "modified",
+            editedFields:
+              row.origin === "adif"
+                ? { ...row.editedFields, [field]: true }
+                : row.editedFields,
+          };
+        })
+      );
+    },
+    []
+  );
+
   const handleToggleLtvFlagField = useCallback(
     (rowId: string, field: LtvEditorFlagField) => {
       setLtvNormalizedRows((previous) =>
@@ -4576,6 +5024,8 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
             onBlur={() => {
               if (field === "code") {
                 handleNormalizeLtvCodeField(row.id);
+              } else if (field === "kmIni" || field === "kmFin") {
+                handleNormalizeLtvKmField(row.id, field);
               }
             }}
             rows={2}
@@ -4597,7 +5047,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         </td>
       );
     },
-    [handleNormalizeLtvCodeField, handleUpdateLtvTextField]
+    [handleNormalizeLtvCodeField, handleNormalizeLtvKmField, handleUpdateLtvTextField]
   );
 
   const renderLtvFlagCell = useCallback(
@@ -4722,7 +5172,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         </tr>
       ) : (
         rows.map((row) => {
-          const isAlreadyImported = importedLtvIdSet.has(row.id);
+          const isAlreadyImported = importedLtvCodeSet.has(normalizeLtvCode(row.code));
           const cellBackground = isAlreadyImported ? "#f9fafb" : "#ffffff";
           const textColor = isAlreadyImported ? "#6b7280" : "#111827";
 
@@ -4822,7 +5272,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
       ),
     [
       handleImportLtvAdifRow,
-      importedLtvIdSet,
+      importedLtvCodeSet,
       renderLtvReadonlyFlagCell,
       renderLtvReadonlyTextCell,
     ]
@@ -5459,38 +5909,13 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         toolbar={
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              flexWrap: "wrap",
+              fontSize: 20,
+              fontWeight: 800,
+              color: "#111827",
+              letterSpacing: "-0.01em",
             }}
           >
-            <DirectionSelector value={direction} onChange={setDirection} />
-
-            <button
-              type="button"
-              onClick={handleDownloadNormalizedFile}
-              disabled={sourceRows.length === 0}
-              style={{
-                padding: "10px 14px",
-                cursor: sourceRows.length === 0 ? "not-allowed" : "pointer",
-              }}
-              title="Télécharger le fichier ligneFT.normalized.ts généré depuis l’état actuel de l’éditeur"
-            >
-              Télécharger le normalisé
-            </button>
-
-            <PublishVersionButton
-              disabled={!hasUnpublishedChanges}
-              isBusy={isPublishing}
-              onClick={handlePublishClick}
-            />
-
-            <RestoreArchiveButton
-              disabled={false}
-              isBusy={isRestoreListLoading}
-              onClick={handleOpenRestoreModal}
-            />
+            LIM Editor
           </div>
         }
         tableArea={
@@ -5498,15 +5923,20 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
             <div
               style={{
                 display: "flex",
-                gap: 8,
+                gap: 4,
+                alignItems: "flex-end",
+                borderBottom: "1px solid #d1d5db",
                 marginBottom: 16,
-                flexWrap: "wrap",
+                background: "#ffffff",
+                padding: "8px 8px 0",
+                borderRadius: "12px 12px 0 0",
               }}
             >
               {[
                 { id: "FT" as const, label: "Tableau FT" },
                 { id: "HORAIRE" as const, label: "Tableau horaire" },
                 { id: "LTV" as const, label: "LTV" },
+                { id: "EXPORT" as const, label: "Export" },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
 
@@ -5516,15 +5946,20 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
                     style={{
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: isActive
-                        ? "1px solid #2563eb"
+                      padding: "8px 16px",
+                      borderRadius: "8px 8px 0 0",
+                      border: "1px solid #d1d5db",
+                      borderBottom: isActive
+                        ? "1px solid #ffffff"
                         : "1px solid #d1d5db",
-                      background: isActive ? "#dbeafe" : "#ffffff",
-                      color: "#111827",
+                      background: isActive ? "#ffffff" : "#f3f4f6",
+                      color: isActive ? "#111827" : "#6b7280",
                       fontWeight: isActive ? 700 : 500,
                       cursor: "pointer",
+                      position: "relative",
+                      zIndex: isActive ? 1 : 0,
+                      marginBottom: isActive ? "-1px" : 0,
+                      fontSize: 14,
                     }}
                   >
                     {tab.label}
@@ -5535,6 +5970,9 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
 
             {activeTab === "FT" ? (
               <>
+                <div style={{ marginBottom: 12 }}>
+                  <DirectionSelector value={direction} onChange={setDirection} />
+                </div>
                 <FTTable
                   directionLabel={directionLabel}
                   sourceStatus={sourceStatus}
@@ -5889,7 +6327,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
                         </span>
                       ) : null
                     }
-                    directionLabel={directionLabel}
+                    directionLabel={getDirectionLabel(horaireDirection)}
                     sourceStatus={sourceStatus}
                     remoteInfo={remoteInfo}
                     inspectionLines={inspectionLines}
@@ -5918,6 +6356,194 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
                   />
                 </div>
               </>
+            ) : activeTab === "EXPORT" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* Titre section champs éditables */}
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#9ca3af",
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  Champs éditables
+                </div>
+
+                {/* Sélecteur de train + composition */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 16,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>Train :</div>
+                  <select
+                    value={exportTrainNumber}
+                    onChange={(e) => setExportTrainNumber(e.target.value)}
+                    disabled={availableTrainNumbers.length === 0}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 10,
+                      border: "1px solid #d1d5db",
+                      background: "#ffffff",
+                      fontSize: 14,
+                      minWidth: 120,
+                      cursor: availableTrainNumbers.length === 0 ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {availableTrainNumbers.length === 0 ? (
+                      <option value="">Aucun train</option>
+                    ) : (
+                      availableTrainNumbers.map((num) => (
+                        <option key={num} value={num}>{num}</option>
+                      ))
+                    )}
+                  </select>
+
+                  <div style={{ fontWeight: 600 }}>Composition :</div>
+                  <button
+                    type="button"
+                    onClick={handleExportCompositionToggle}
+                    title="Cliquer pour basculer entre US et UM"
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 800,
+                      padding: "4px 14px",
+                      borderRadius: 8,
+                      border: "2px solid #374151",
+                      background: "#fde047",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {exportComposition}
+                  </button>
+
+                  <div style={{ fontWeight: 600 }}>Date :</div>
+                  <input
+                    type="date"
+                    value={exportDate}
+                    min={todayIso}
+                    max={tomorrowIso}
+                    onChange={(e) => setExportDate(e.target.value)}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "1px solid #d1d5db",
+                      fontSize: 14,
+                      background: "#ffffff",
+                      cursor: "pointer",
+                    }}
+                  />
+
+                  {exportAllVariantInfos.length > 0 ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {exportAllVariantInfos.map(({ index, label, dates, days }) => {
+                        const isAuto = index === exportAutoVariantIndex;
+                        const isSelected = index === exportVariantIndex;
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() =>
+                              setExportVariantOverrideIndex(isAuto ? null : index)
+                            }
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 3,
+                              padding: "8px 12px",
+                              borderRadius: 10,
+                              border: isSelected
+                                ? "2px solid #2563eb"
+                                : "1.5px solid #d1d5db",
+                              background: isSelected ? "#eff6ff" : "#f9fafb",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              position: "relative",
+                              minWidth: 120,
+                            }}
+                          >
+                            {isAuto && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: 4,
+                                  right: 7,
+                                  fontSize: 9,
+                                  color: isSelected ? "#2563eb" : "#9ca3af",
+                                  fontWeight: 600,
+                                  letterSpacing: 0.5,
+                                }}
+                              >
+                                auto
+                              </div>
+                            )}
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: isSelected ? "#1d4ed8" : "#111827",
+                              }}
+                            >
+                              {label}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#6b7280" }}>{dates}</div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontFamily: "monospace",
+                                color: "#374151",
+                                letterSpacing: 2,
+                              }}
+                            >
+                              {days}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: "#9ca3af" }}>
+                      Aucune variante disponible
+                    </div>
+                  )}
+                </div>
+
+                {/* Aperçu PDF */}
+                {exportTrainNumber !== "" && (
+                  <PDFViewer
+                    style={{
+                      width: "100%",
+                      height: "75vh",
+                      border: "1px solid #d1d5db",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <LimPdf
+                      trainNumber={exportTrainNumber}
+                      categorieEspagne={
+                        exportVariant?.meta.categorieEspagne?.trim() ?? ""
+                      }
+                      origine={exportVariant?.meta.origine?.trim() ?? ""}
+                      destination={exportVariant?.meta.destination?.trim() ?? ""}
+                      dateFormatted={exportDateFormatted}
+                      composition={exportComposition}
+                      materiel={exportVariant?.meta.materiel?.trim() ?? ""}
+                      ligne={exportVariant?.meta.ligne?.trim() ?? ""}
+                      longueur={exportLongueur}
+                      masse={exportMasse}
+                      ltvRows={exportLtvRows}
+                      ftRows={exportFtRows}
+                    />
+                  </PDFViewer>
+                )}
+              </div>
             ) : (
               <div
                 style={{
@@ -6492,8 +7118,46 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
         }
         detailsPanel={
           activeTab === "FT" ? (
-            <RowDetailsPanel
-              directionLabel={directionLabel}
+            <>
+              <div
+                style={{
+                  padding: 20,
+                  border: "1px solid #d1d5db",
+                  borderRadius: 16,
+                  background: "#ffffff",
+                  marginBottom: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <PublishVersionButton
+                  disabled={!hasUnpublishedChanges}
+                  isBusy={isPublishing}
+                  onClick={handlePublishClick}
+                />
+                <button
+                  type="button"
+                  onClick={handleDownloadNormalizedFile}
+                  disabled={sourceRows.length === 0}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#111827",
+                    fontWeight: 700,
+                    cursor: sourceRows.length === 0 ? "not-allowed" : "pointer",
+                    opacity: sourceRows.length === 0 ? 0.5 : 1,
+                  }}
+                  title="Télécharger le fichier ligneFT.normalized.ts généré depuis l'état actuel de l'éditeur"
+                >
+                  Télécharger le normalisé
+                </button>
+              </div>
+              <RowDetailsPanel
+                directionLabel={directionLabel}
               sourceStatus={sourceStatus}
               rowCount={sourceRows.length}
               selectedRow={selectedRow}
@@ -6516,6 +7180,7 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
               etcsOptions={etcsOptions}
               onApplyEtcs={handleApplyEtcs}
             />
+            </>
           ) : activeTab === "HORAIRE" ? (
             <div
               style={{
@@ -6526,7 +7191,39 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
                 color: "#111827",
               }}
             >
-
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  marginBottom: 20,
+                }}
+              >
+                <PublishVersionButton
+                  disabled={!hasUnpublishedChanges}
+                  isBusy={isPublishing}
+                  onClick={handlePublishClick}
+                />
+                <button
+                  type="button"
+                  onClick={handleDownloadNormalizedFile}
+                  disabled={sourceRows.length === 0}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#111827",
+                    fontWeight: 700,
+                    cursor: sourceRows.length === 0 ? "not-allowed" : "pointer",
+                    opacity: sourceRows.length === 0 ? 0.5 : 1,
+                  }}
+                  title="Télécharger le fichier ligneFT.normalized.ts généré depuis l'état actuel de l'éditeur"
+                >
+                  Télécharger le normalisé
+                </button>
+              </div>
 
               <div
                 style={{
@@ -7307,6 +8004,51 @@ const [isNumeroFranceEditing, setIsNumeroFranceEditing] = useState(false);
                   </button>
                 </div>
               )}
+            </div>
+          ) : activeTab === "EXPORT" ? (
+            <div
+              style={{
+                padding: 20,
+                border: "1px solid #d1d5db",
+                borderRadius: 16,
+                background: "#ffffff",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                disabled
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#f3f4f6",
+                  color: "#9ca3af",
+                  fontWeight: 700,
+                  cursor: "not-allowed",
+                }}
+              >
+                Télécharger ce PDF
+              </button>
+              <button
+                type="button"
+                disabled
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#f3f4f6",
+                  color: "#9ca3af",
+                  fontWeight: 700,
+                  cursor: "not-allowed",
+                }}
+              >
+                Télécharger tous les PDF du jour
+              </button>
             </div>
           ) : (
             <div

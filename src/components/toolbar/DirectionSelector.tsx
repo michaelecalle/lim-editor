@@ -17,8 +17,6 @@ export default function DirectionSelector({
         gap: "12px",
       }}
     >
-      <strong>LIM Editor</strong>
-
       <label>
         Sens :{" "}
         <select
