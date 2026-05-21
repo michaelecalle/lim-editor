@@ -244,7 +244,7 @@ function getDirectionFromTrainNumber(
     return null;
   }
 
-  return parsed % 2 === 0 ? "SUD_NORD" : "NORD_SUD";
+  return parsed % 2 === 0 ? "NORD_SUD" : "SUD_NORD";
 }
 
 function findVariantForDate(
