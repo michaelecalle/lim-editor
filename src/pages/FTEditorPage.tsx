@@ -5429,7 +5429,7 @@ export default function FTEditorPage() {
                 color: "#111827",
               }}
             >
-              Numéro de train
+              Entrez ici le numéro du train en Espagne
             </div>
 
             <input
