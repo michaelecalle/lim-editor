@@ -208,6 +208,8 @@ export default function PdfBlocFt({ rows }: Props) {
 
             {/* Dependencia + notes inline */}
             <View style={[s.cell, { flex: 1, backgroundColor: hlBg }]}>
+              {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+              {/* @ts-ignore numberOfLines est valide à l'exécution mais absent des types @react-pdf/renderer */}
               <Text
                 numberOfLines={1}
                 style={{
