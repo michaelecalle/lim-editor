@@ -1,6 +1,10 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { PdfFtRow } from "./LimPdf";
 
+// numberOfLines est valide à l'exécution dans @react-pdf/renderer mais absent de ses types TS
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TextNL = Text as any;
+
 type Props = {
   rows: PdfFtRow[];
 };
@@ -208,9 +212,7 @@ export default function PdfBlocFt({ rows }: Props) {
 
             {/* Dependencia + notes inline */}
             <View style={[s.cell, { flex: 1, backgroundColor: hlBg }]}>
-              {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-              {/* @ts-ignore numberOfLines est valide à l'exécution mais absent des types @react-pdf/renderer */}
-              <Text
+              <TextNL
                 numberOfLines={1}
                 style={{
                   fontSize: 7,
@@ -219,7 +221,7 @@ export default function PdfBlocFt({ rows }: Props) {
                 }}
               >
                 {hasStation ? row.dependencia + dotLeader(row.dependencia) : row.dependencia}
-              </Text>
+              </TextNL>
               {inlineNotes.map((line, i) => (
                 <NoteLine key={i} text={line} />
               ))}
