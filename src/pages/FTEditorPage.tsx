@@ -244,7 +244,7 @@ function getDirectionFromTrainNumber(
     return null;
   }
 
-  return parsed % 2 === 0 ? "NORD_SUD" : "SUD_NORD";
+  return parsed % 2 === 0 ? "SUD_NORD" : "NORD_SUD";
 }
 
 function findVariantForDate(
@@ -1717,7 +1717,7 @@ export default function FTEditorPage() {
   const directionLabel = getDirectionLabel(direction);
   const sourceTableLabel = getSourceTableLabel(direction);
   const horaireDirection: EditorDirection =
-    getDirectionFromTrainNumber(selectedTrainNumber) ?? direction;
+    getDirectionFromTrainNumber(selectedTrainNumber) ?? "SUD_NORD";
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
