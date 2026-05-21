@@ -1915,12 +1915,13 @@ export default function FTEditorPage() {
         if (i === dataRowsOnly.length - 1) {
           vmaxGroups.push({ start: gs, len: dataRowsOnly.length - gs });
         }
-        lastV = v;
+        if (v !== "") lastV = v; // ne pas écraser lastV avec "" (héritage de vitesse)
       }
     }
     const vmaxBarIds = new Set<string>();
     const vmaxMiddleIds = new Set<string>();
     const vmaxTextBelowMap = new Map<string, string>();
+    const vmaxDisplayValueMap = new Map<string, string>();
     for (const { start, len } of vmaxGroups) {
       const hasBar = start > 0;
       const value = dataRowsOnly[start].vmax;
@@ -1933,7 +1934,9 @@ export default function FTEditorPage() {
         const midInGroup = hasBar && len > 1
           ? 1 + Math.floor((len - 2) / 2)
           : Math.floor((len - 1) / 2);
-        vmaxMiddleIds.add(dataRowsOnly[start + midInGroup].id);
+        const midRow = dataRowsOnly[start + midInGroup];
+        vmaxMiddleIds.add(midRow.id);
+        vmaxDisplayValueMap.set(midRow.id, value);
       }
     }
 
@@ -1998,9 +2001,10 @@ export default function FTEditorPage() {
       const showRcText = rcMiddleIds.has(row.id);
       const rampCaractTextBelow = rcTextBelowMap.get(row.id) ?? "";
       const showVmaxText = vmaxMiddleIds.has(row.id);
+      const vmaxDisplayValue = vmaxDisplayValueMap.get(row.id) ?? "";
       const vmaxTextBelow = vmaxTextBelowMap.get(row.id) ?? "";
 
-      return { ...row, showBloqueo, showBloqueoBar, showBloqueoText, bloqueoTextBelow, showRadio, showRadioBar, showRadioText, radioTextBelow, showVBar, showVmaxText, vmaxTextBelow, showRcBar, showRcText, rampCaractTextBelow, highlight };
+      return { ...row, showBloqueo, showBloqueoBar, showBloqueoText, bloqueoTextBelow, showRadio, showRadioBar, showRadioText, radioTextBelow, showVBar, showVmaxText, vmaxDisplayValue, vmaxTextBelow, showRcBar, showRcText, rampCaractTextBelow, highlight };
     });
   }, [parsedSource, exportDirection, exportVariant]);
 

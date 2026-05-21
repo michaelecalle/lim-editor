@@ -44,6 +44,7 @@ export type PdfFtRow = {
   radioTextBelow: string;
   showVBar: boolean;
   showVmaxText: boolean;
+  vmaxDisplayValue: string;
   vmaxTextBelow: string;
   showRcBar: boolean;
   showRcText: boolean;

@@ -185,7 +185,7 @@ export default function PdfBlocFt({ rows }: Props) {
                     textAlign: "center",
                   }}
                 >
-                  {row.vmax}
+                  {row.vmaxDisplayValue}
                 </Text>
               )}
             </View>
