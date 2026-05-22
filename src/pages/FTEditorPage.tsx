@@ -44,6 +44,8 @@ import { PDFViewer } from "@react-pdf/renderer";
 import LimPdf from "../components/pdf/LimPdf";
 import type { PdfFtRow, PdfLtvRow } from "../components/pdf/LimPdf";
 import PdfExportPanel from "../components/export/PdfExportPanel";
+import FTTab from "../components/tabs/FTTab";
+import ExportTab from "../components/tabs/ExportTab";
 import {
   type LtvEditorRow,
   type LtvAdifApiEntry,
@@ -4690,57 +4692,34 @@ export default function FTEditorPage() {
             </div>
 
             {activeTab === "FT" ? (
-              <>
-                <div style={{ marginBottom: 12 }}>
-                  <DirectionSelector value={direction} onChange={setDirection} />
-                </div>
-                <FTTable
-                  directionLabel={directionLabel}
-                  sourceStatus={sourceStatus}
-                  remoteInfo={remoteInfo}
-                  inspectionLines={inspectionLines}
-                  sourceArrayName={sourceTableLabel}
-                  rowCount={sourceRows.length}
-                  firstRowPreview={firstRowPreview}
-                  lastRowPreview={lastRowPreview}
-                  rows={sourceRows}
-                  selectedRowId={selectedRowId}
-                  onRowSelect={(row) => {
-                    setSelectedRowId(row.id);
-                    setRequestedEditorField(null);
-                  }}
-                  onCellEditRequest={(row, field) => {
-                    setSelectedRowId(row.id);
-                    setRequestedEditorField(field);
-                  }}
-                  onDeleteRows={handleDeleteRows}
-                  onUpsertNote={handleUpsertNote}
-                  onInsertRowAbove={handleInsertRowAbove}
-                />
-
-                <EditorStatusBanner
-                  title="Diagnostic export local"
-                  message={
-                    hasUnpublishedChanges
-                      ? `${exportMessage} Modifications locales non publiées détectées.`
-                      : `${exportMessage} Aucune modification locale non publiée.`
-                  }
-                  tone={
-                    exportStatus === "success"
-                      ? "success"
-                      : exportStatus === "error"
-                        ? "error"
-                        : hasUnpublishedChanges
-                          ? "warning"
-                          : "neutral"
-                  }
-                  details={
-                    exportDiagnostics.length > 0
-                      ? exportDiagnostics
-                      : ["Aucun diagnostic d’export disponible pour l’instant."]
-                  }
-                />
-              </>
+              <FTTab
+                direction={direction}
+                onDirectionChange={setDirection}
+                directionLabel={directionLabel}
+                sourceStatus={sourceStatus}
+                remoteInfo={remoteInfo}
+                inspectionLines={inspectionLines}
+                sourceTableLabel={sourceTableLabel}
+                sourceRows={sourceRows}
+                firstRowPreview={firstRowPreview}
+                lastRowPreview={lastRowPreview}
+                selectedRowId={selectedRowId}
+                onRowSelect={(row) => {
+                  setSelectedRowId(row.id);
+                  setRequestedEditorField(null);
+                }}
+                onCellEditRequest={(row, field) => {
+                  setSelectedRowId(row.id);
+                  setRequestedEditorField(field);
+                }}
+                onDeleteRows={handleDeleteRows}
+                onUpsertNote={handleUpsertNote}
+                onInsertRowAbove={handleInsertRowAbove}
+                hasUnpublishedChanges={hasUnpublishedChanges}
+                exportMessage={exportMessage}
+                exportStatus={exportStatus}
+                exportDiagnostics={exportDiagnostics}
+              />
             ) : activeTab === "HORAIRE" ? (
               <>
                 <div
@@ -5078,204 +5057,27 @@ export default function FTEditorPage() {
                 </div>
               </>
             ) : activeTab === "EXPORT" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {/* Titre Aperçu */}
-                <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "#111827",
-                  }}
-                >
-                  Aperçu
-                </div>
-
-                {/* Titre section champs éditables */}
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#9ca3af",
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                  }}
-                >
-                  Champs éditables
-                </div>
-
-                {/* Sélecteur de train + composition */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 16,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>Train :</div>
-                  <select
-                    value={exportTrainNumber}
-                    onChange={(e) => setExportTrainNumber(e.target.value)}
-                    disabled={availableTrainNumbers.length === 0}
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 10,
-                      border: "1px solid #d1d5db",
-                      background: "#ffffff",
-                      fontSize: 14,
-                      minWidth: 120,
-                      cursor: availableTrainNumbers.length === 0 ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {availableTrainNumbers.length === 0 ? (
-                      <option value="">Aucun train</option>
-                    ) : (
-                      availableTrainNumbers.map((num) => (
-                        <option key={num} value={num}>{num}</option>
-                      ))
-                    )}
-                  </select>
-
-                  <div style={{ fontWeight: 600 }}>Composition :</div>
-                  <button
-                    type="button"
-                    onClick={handleExportCompositionToggle}
-                    title="Cliquer pour basculer entre US et UM"
-                    style={{
-                      fontSize: 22,
-                      fontWeight: 800,
-                      padding: "4px 14px",
-                      borderRadius: 8,
-                      border: "2px solid #374151",
-                      background: "#fde047",
-                      cursor: "pointer",
-                      userSelect: "none",
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {exportComposition}
-                  </button>
-
-                  <div style={{ fontWeight: 600 }}>Date :</div>
-                  <input
-                    type="date"
-                    value={exportDate}
-                    min={todayIso}
-                    max={tomorrowIso}
-                    onChange={(e) => setExportDate(e.target.value)}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: 8,
-                      border: "1px solid #d1d5db",
-                      fontSize: 14,
-                      background: "#ffffff",
-                      cursor: "pointer",
-                    }}
-                  />
-
-                  {exportAllVariantInfos.length > 0 ? (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {exportAllVariantInfos.map(({ index, label, dates, days }) => {
-                        const isAuto = index === exportAutoVariantIndex;
-                        const isSelected = index === exportVariantIndex;
-                        return (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() =>
-                              setExportVariantOverrideIndex(isAuto ? null : index)
-                            }
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 3,
-                              padding: "8px 12px",
-                              borderRadius: 10,
-                              border: isSelected
-                                ? "2px solid #2563eb"
-                                : "1.5px solid #d1d5db",
-                              background: isSelected ? "#eff6ff" : "#f9fafb",
-                              cursor: "pointer",
-                              textAlign: "left",
-                              position: "relative",
-                              minWidth: 120,
-                            }}
-                          >
-                            {isAuto && (
-                              <div
-                                style={{
-                                  position: "absolute",
-                                  top: 4,
-                                  right: 7,
-                                  fontSize: 9,
-                                  color: isSelected ? "#2563eb" : "#9ca3af",
-                                  fontWeight: 600,
-                                  letterSpacing: 0.5,
-                                }}
-                              >
-                                auto
-                              </div>
-                            )}
-                            <div
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color: isSelected ? "#1d4ed8" : "#111827",
-                              }}
-                            >
-                              {label}
-                            </div>
-                            <div style={{ fontSize: 11, color: "#6b7280" }}>{dates}</div>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                fontFamily: "monospace",
-                                color: "#374151",
-                                letterSpacing: 2,
-                              }}
-                            >
-                              {days}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 13, color: "#9ca3af" }}>
-                      Aucune variante disponible
-                    </div>
-                  )}
-                </div>
-
-                {/* Aperçu PDF */}
-                {exportTrainNumber !== "" && (
-                  <PDFViewer
-                    style={{
-                      width: "100%",
-                      height: "75vh",
-                      border: "1px solid #d1d5db",
-                      borderRadius: 8,
-                    }}
-                  >
-                    <LimPdf
-                      trainNumber={exportTrainNumber}
-                      categorieEspagne={
-                        exportVariant?.meta.categorieEspagne?.trim() ?? ""
-                      }
-                      origine={exportVariant?.meta.origine?.trim() ?? ""}
-                      destination={exportVariant?.meta.destination?.trim() ?? ""}
-                      dateFormatted={exportDateFormatted}
-                      composition={exportComposition}
-                      materiel={exportVariant?.meta.materiel?.trim() ?? ""}
-                      ligne={exportVariant?.meta.ligne?.trim() ?? ""}
-                      longueur={exportLongueur}
-                      masse={exportMasse}
-                      ltvRows={exportLtvRowsFiltered}
-                      ftRows={exportFtRowsFinal}
-                    />
-                  </PDFViewer>
-                )}
-              </div>
+              <ExportTab
+                exportTrainNumber={exportTrainNumber}
+                onExportTrainNumberChange={setExportTrainNumber}
+                availableTrainNumbers={availableTrainNumbers}
+                exportComposition={exportComposition}
+                onExportCompositionToggle={handleExportCompositionToggle}
+                exportDate={exportDate}
+                onExportDateChange={setExportDate}
+                todayIso={todayIso}
+                tomorrowIso={tomorrowIso}
+                exportAllVariantInfos={exportAllVariantInfos}
+                exportAutoVariantIndex={exportAutoVariantIndex}
+                exportVariantIndex={exportVariantIndex}
+                onExportVariantOverrideIndexChange={setExportVariantOverrideIndex}
+                exportVariant={exportVariant}
+                exportDateFormatted={exportDateFormatted}
+                exportLongueur={exportLongueur}
+                exportMasse={exportMasse}
+                exportLtvRowsFiltered={exportLtvRowsFiltered}
+                exportFtRowsFinal={exportFtRowsFinal}
+              />
             ) : (
               <div
                 style={{
