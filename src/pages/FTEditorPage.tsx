@@ -46,6 +46,7 @@ import type { PdfFtRow, PdfLtvRow } from "../components/pdf/LimPdf";
 import PdfExportPanel from "../components/export/PdfExportPanel";
 import FTTab from "../components/tabs/FTTab";
 import ExportTab from "../components/tabs/ExportTab";
+import HoraireTab from "../components/tabs/HoraireTab";
 import {
   type LtvEditorRow,
   type LtvAdifApiEntry,
@@ -1161,7 +1162,21 @@ export default function FTEditorPage() {
 
       if (currentHoraMinutes != null && previousHoraMinutes != null) {
         const rawDiff = currentHoraMinutes - previousHoraMinutes;
-        computedConc = String(rawDiff >= 0 ? rawDiff : rawDiff + 24 * 60);
+        const diffMinutes = rawDiff >= 0 ? rawDiff : rawDiff + 24 * 60;
+
+        const comMinutes =
+          nextCom?.trim() && /^[1-9]\d*$/.test(nextCom.trim())
+            ? Number(nextCom.trim())
+            : 0;
+        const tecnMinutes =
+          nextTecn?.trim() && /^[1-9]\d*$/.test(nextTecn.trim())
+            ? Number(nextTecn.trim())
+            : 0;
+
+        const netDiff = diffMinutes - comMinutes - tecnMinutes;
+        if (netDiff >= 0) {
+          computedConc = String(netDiff);
+        }
       }
 
       let nextConc = "";
@@ -1216,6 +1231,23 @@ export default function FTEditorPage() {
   const isSelectedTrainUnpublished =
     selectedTrainNumber.trim() !== "" &&
     unpublishedTrainNumbers.has(selectedTrainNumber);
+
+  const horaireTrainOptions = useMemo(() => {
+    return availableTrainNumbers.map((trainNumber) => {
+      const isUnpublished = unpublishedTrainNumbers.has(trainNumber);
+      const trainData = parsedSource.trains?.[trainNumber];
+      const primaryVariant = getVariantAtIndex(trainData, 0);
+      const displayedNumeroFrance =
+        primaryVariant != null
+          ? getSuggestedNumeroFranceForPublish(parsedSource, trainNumber, primaryVariant)
+          : "";
+      const label =
+        displayedNumeroFrance !== ""
+          ? `${trainNumber} / ${displayedNumeroFrance}`
+          : trainNumber;
+      return { trainNumber, label, isUnpublished };
+    });
+  }, [availableTrainNumbers, parsedSource, unpublishedTrainNumbers]);
 
   const horaireLocationOptions = useMemo(() => {
     const values = horaireSourceRows
@@ -1428,6 +1460,66 @@ export default function FTEditorPage() {
     selectedTrainNumber,
     selectedVariantIndex,
   ]);
+
+  const handleHoraireOriginChange = useCallback((nextValue: string) => {
+    setSelectedOrigin(nextValue);
+    if (selectedTrainNumber.trim() !== "") {
+      setHoraireSelectionsByTrain((previous) => {
+        const previousSelection = previous[selectedTrainNumber];
+        const variant = getVariantAtIndex(
+          parsedSource.trains?.[selectedTrainNumber],
+          selectedVariantIndex
+        );
+        const trainMeta = variant?.meta;
+        return {
+          ...previous,
+          [selectedTrainNumber]: {
+            selectedOrigin: nextValue,
+            selectedDestination:
+              previousSelection?.selectedDestination ??
+              trainMeta?.destination ??
+              selectedDestination,
+            validatedOrigin:
+              previousSelection?.validatedOrigin ?? trainMeta?.origine ?? "",
+            validatedDestination:
+              previousSelection?.validatedDestination ??
+              trainMeta?.destination ??
+              "",
+          },
+        };
+      });
+    }
+  }, [selectedTrainNumber, selectedVariantIndex, parsedSource, selectedDestination]);
+
+  const handleHoraireDestinationChange = useCallback((nextValue: string) => {
+    setSelectedDestination(nextValue);
+    if (selectedTrainNumber.trim() !== "") {
+      setHoraireSelectionsByTrain((previous) => {
+        const previousSelection = previous[selectedTrainNumber];
+        const variant = getVariantAtIndex(
+          parsedSource.trains?.[selectedTrainNumber],
+          selectedVariantIndex
+        );
+        const trainMeta = variant?.meta;
+        return {
+          ...previous,
+          [selectedTrainNumber]: {
+            selectedOrigin:
+              previousSelection?.selectedOrigin ??
+              trainMeta?.origine ??
+              selectedOrigin,
+            selectedDestination: nextValue,
+            validatedOrigin:
+              previousSelection?.validatedOrigin ?? trainMeta?.origine ?? "",
+            validatedDestination:
+              previousSelection?.validatedDestination ??
+              trainMeta?.destination ??
+              "",
+          },
+        };
+      });
+    }
+  }, [selectedTrainNumber, selectedVariantIndex, parsedSource, selectedOrigin]);
 
   const hasUnpublishedChanges = useMemo(() => {
     return !areSourceTablesEqual(parsedSource, referenceData);
@@ -4721,341 +4813,40 @@ export default function FTEditorPage() {
                 exportDiagnostics={exportDiagnostics}
               />
             ) : activeTab === "HORAIRE" ? (
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    flexWrap: "wrap",
-                    marginBottom: 12,
-                  }}
-                >
-                  <div style={{ fontWeight: 600 }}>Train sélectionné :</div>
-
-                  <select
-                    value={selectedTrainNumber}
-                    onChange={(event) =>
-                      setSelectedTrainNumber(event.target.value)
-                    }
-                    disabled={availableTrainNumbers.length === 0}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: isSelectedTrainUnpublished
-                        ? "1px solid #2563eb"
-                        : "1px solid #d1d5db",
-                      background: "#ffffff",
-                      color: isSelectedTrainUnpublished ? "#2563eb" : "#111827",
-                      fontWeight: isSelectedTrainUnpublished ? 700 : 500,
-                      minWidth: 120,
-                      cursor:
-                        availableTrainNumbers.length === 0
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                  >
-                    {availableTrainNumbers.length === 0 ? (
-                      <option value="">Aucun train</option>
-                    ) : (
-                      availableTrainNumbers.map((trainNumber) => {
-                        const isUnpublished =
-                          unpublishedTrainNumbers.has(trainNumber);
-                        const trainData = parsedSource.trains?.[trainNumber];
-                        const primaryVariant = getVariantAtIndex(trainData, 0);
-
-                        const displayedNumeroFrance =
-                          primaryVariant != null
-                            ? getSuggestedNumeroFranceForPublish(
-                                parsedSource,
-                                trainNumber,
-                                primaryVariant
-                              )
-                            : "";
-
-                        const displayedTrainLabel =
-                          displayedNumeroFrance !== ""
-                            ? `${trainNumber} / ${displayedNumeroFrance}`
-                            : trainNumber;
-
-                        return (
-                          <option
-                            key={trainNumber}
-                            value={trainNumber}
-                            style={{
-                              color: isUnpublished ? "#2563eb" : "#111827",
-                              fontWeight: isUnpublished ? 700 : 400,
-                            }}
-                          >
-                            {displayedTrainLabel}
-                          </option>
-                        );
-                      })
-                    )}
-                  </select>
-
-                  <div style={{ fontWeight: 600 }}>Origine :</div>
-
-                  <select
-                    value={selectedOrigin}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      setSelectedOrigin(nextValue);
-
-                      if (selectedTrainNumber.trim() !== "") {
-                        setHoraireSelectionsByTrain((previous) => {
-                          const previousSelection = previous[selectedTrainNumber];
-                          const selectedVariant = getVariantAtIndex(
-                            parsedSource.trains?.[selectedTrainNumber],
-                            selectedVariantIndex
-                          );
-                          const trainMeta = selectedVariant?.meta;
-
-                          return {
-                            ...previous,
-                            [selectedTrainNumber]: {
-                              selectedOrigin: nextValue,
-                              selectedDestination:
-                                previousSelection?.selectedDestination ??
-                                trainMeta?.destination ??
-                                selectedDestination,
-                              validatedOrigin:
-                                previousSelection?.validatedOrigin ??
-                                trainMeta?.origine ??
-                                "",
-                              validatedDestination:
-                                previousSelection?.validatedDestination ??
-                                trainMeta?.destination ??
-                                "",
-                            },
-                          };
-                        });
-                      }
-                    }}
-                    disabled={horaireLocationOptions.length === 0}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid #d1d5db",
-                      background: "#ffffff",
-                      minWidth: 180,
-                      cursor:
-                        horaireLocationOptions.length === 0
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                  >
-                    <option value="">Choisir</option>
-                    {horaireLocationOptions.map((location) => (
-                      <option key={`origin-${location}`} value={location}>
-                        {location}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div style={{ fontWeight: 600 }}>Destination :</div>
-
-                  <select
-                    value={selectedDestination}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      setSelectedDestination(nextValue);
-
-                      if (selectedTrainNumber.trim() !== "") {
-                        setHoraireSelectionsByTrain((previous) => {
-                          const previousSelection = previous[selectedTrainNumber];
-                          const selectedVariant = getVariantAtIndex(
-                            parsedSource.trains?.[selectedTrainNumber],
-                            selectedVariantIndex
-                          );
-                          const trainMeta = selectedVariant?.meta;
-
-                          return {
-                            ...previous,
-                            [selectedTrainNumber]: {
-                              selectedOrigin:
-                                previousSelection?.selectedOrigin ??
-                                trainMeta?.origine ??
-                                selectedOrigin,
-                              selectedDestination: nextValue,
-                              validatedOrigin:
-                                previousSelection?.validatedOrigin ??
-                                trainMeta?.origine ??
-                                "",
-                              validatedDestination:
-                                previousSelection?.validatedDestination ??
-                                trainMeta?.destination ??
-                                "",
-                            },
-                          };
-                        });
-                      }
-                    }}
-                    disabled={horaireLocationOptions.length === 0}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid #d1d5db",
-                      background: "#ffffff",
-                      minWidth: 180,
-                      cursor:
-                        horaireLocationOptions.length === 0
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                  >
-                    <option value="">Choisir</option>
-                    {horaireLocationOptions.map((location) => (
-                      <option key={`destination-${location}`} value={location}>
-                        {location}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={handleValidateHoraireSelection}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: "1px solid #d1d5db",
-                      background: "#ffffff",
-                      color: "#111827",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Valider
-                  </button>
-
-                  <div
-                    style={{
-                      width: 1,
-                      height: 28,
-                      background: "#d1d5db",
-                      marginLeft: 4,
-                      marginRight: 4,
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleCreateTrain}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: "1px solid #2563eb",
-                      background: "#2563eb",
-                      color: "#ffffff",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Créer
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleOpenDeleteTrainConfirm}
-                    disabled={selectedTrainNumber.trim() === ""}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: "1px solid #dc2626",
-                      background:
-                        selectedTrainNumber.trim() === ""
-                          ? "#fca5a5"
-                          : "#dc2626",
-                      color: "#ffffff",
-                      fontWeight: 600,
-                      cursor:
-                        selectedTrainNumber.trim() === ""
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
-                  >
-                    Supprimer
-                  </button>
-                </div>
-
-                {horaireValidationError ? (
-                  <div
-                    style={{
-                      marginBottom: 12,
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid #fecaca",
-                      background: "#fef2f2",
-                      color: "#991b1b",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {horaireValidationError}
-                  </div>
-                ) : null}
-
-                <div
-                  style={{
-                    border: isSelectedTrainUnpublished
-                      ? "2px solid #93c5fd"
-                      : "2px solid transparent",
-                    borderRadius: 16,
-                    padding: isSelectedTrainUnpublished ? 8 : 0,
-                    background: "#ffffff",
-                    transition: "border-color 0.15s ease",
-                  }}
-                >
-                  <FTTable
-                    title="Données horaires"
-                    titleBadge={
-                      isSelectedTrainUnpublished ? (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            border: "1px solid #93c5fd",
-                            background: "#dbeafe",
-                            color: "#1d4ed8",
-                            fontWeight: 700,
-                            fontSize: 14,
-                            lineHeight: 1.2,
-                          }}
-                        >
-                          En cours d’édition
-                        </span>
-                      ) : null
-                    }
-                    directionLabel={getDirectionLabel(horaireDirection)}
-                    sourceStatus={sourceStatus}
-                    remoteInfo={remoteInfo}
-                    inspectionLines={inspectionLines}
-                    sourceArrayName={sourceTableLabel}
-                    rowCount={displayedHoraireRows.length}
-                    firstRowPreview={getRowPreview(displayedHoraireRows[0])}
-                    lastRowPreview={getRowPreview(
-                      displayedHoraireRows[displayedHoraireRows.length - 1]
-                    )}
-                    rows={displayedHoraireRows}
-                    columns={HORAIRE_COLUMNS}
-                    dimHoraireColumns={false}
-                    selectedRowId={selectedRowId}
-                    onRowSelect={(row) => {
-                      setSelectedRowId(row.id);
-                      setRequestedEditorField(null);
-                    }}
-                    onCellEditRequest={(row, field) => {
-                      setSelectedRowId(row.id);
-                      setRequestedEditorField(field);
-                    }}
-                    onInlineComCommit={handleApplyComForSelectedTrain}
-                    onInlineHoraCommit={handleApplyHoraForSelectedTrain}
-                    onInlineTecnCommit={handleApplyTecnForSelectedTrain}
-                    onInlineConcCommit={handleApplyConcForSelectedTrain}
-                  />
-                </div>
-              </>
+              <HoraireTab
+                selectedTrainNumber={selectedTrainNumber}
+                onSelectedTrainNumberChange={setSelectedTrainNumber}
+                trainOptions={horaireTrainOptions}
+                isSelectedTrainUnpublished={isSelectedTrainUnpublished}
+                selectedOrigin={selectedOrigin}
+                onOriginChange={handleHoraireOriginChange}
+                selectedDestination={selectedDestination}
+                onDestinationChange={handleHoraireDestinationChange}
+                horaireLocationOptions={horaireLocationOptions}
+                onValidate={handleValidateHoraireSelection}
+                onCreateTrain={handleCreateTrain}
+                onOpenDeleteTrainConfirm={handleOpenDeleteTrainConfirm}
+                horaireValidationError={horaireValidationError}
+                horaireDirection={horaireDirection}
+                sourceStatus={sourceStatus}
+                remoteInfo={remoteInfo}
+                inspectionLines={inspectionLines}
+                sourceTableLabel={sourceTableLabel}
+                displayedHoraireRows={displayedHoraireRows}
+                selectedRowId={selectedRowId}
+                onRowSelect={(row) => {
+                  setSelectedRowId(row.id);
+                  setRequestedEditorField(null);
+                }}
+                onCellEditRequest={(row, field) => {
+                  setSelectedRowId(row.id);
+                  setRequestedEditorField(field);
+                }}
+                onInlineComCommit={handleApplyComForSelectedTrain}
+                onInlineHoraCommit={handleApplyHoraForSelectedTrain}
+                onInlineTecnCommit={handleApplyTecnForSelectedTrain}
+                onInlineConcCommit={handleApplyConcForSelectedTrain}
+              />
             ) : activeTab === "EXPORT" ? (
               <ExportTab
                 exportTrainNumber={exportTrainNumber}
