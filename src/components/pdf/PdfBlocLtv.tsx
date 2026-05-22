@@ -253,7 +253,7 @@ export default function PdfBlocLtv({ rows }: Props) {
   const kmFinW  = autoWidth(rows.map((r) => r.kmFin),        14);
   const speedW  = autoWidth(rows.map((r) => r.speed),        14);
   const motivoW = autoWidth(rows.map((r) => r.motivo),       30);
-  const obsW    = autoWidth(rows.map((r) => r.observaciones), 30);
+  const obsW    = autoWidth(rows.map((r) => r.observaciones), 64); // min = largeur de "Observaciones" en header
 
   return (
     <View style={s.container}>
@@ -289,9 +289,9 @@ export default function PdfBlocLtv({ rows }: Props) {
 
       {/* Lignes de données */}
       {rows.length === 0 ? (
-        <View style={[s.dataRow, { padding: "4pt 5pt" }]}>
-          <Text style={{ fontSize: 7, color: "#6b7280", fontFamily: "Helvetica" }}>
-            Aucune LTV normalisée.
+        <View style={{ backgroundColor: "#e5e7eb", padding: "5pt 8pt" }}>
+          <Text style={{ fontSize: 7, fontFamily: "Helvetica", color: "#374151" }}>
+            Aucune LTV
           </Text>
         </View>
       ) : (

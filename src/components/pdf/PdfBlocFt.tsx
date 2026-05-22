@@ -7,12 +7,16 @@ const TextNL = Text as any;
 
 type Props = {
   rows: PdfFtRow[];
+  composition: string;
+  longueur: number | undefined;
+  masse: number | undefined;
+  showTableFooter?: boolean;
 };
 
 const BORDER_MAIN = "0.8pt solid #374151";
 const BORDER_LIGHT = "0.5pt solid #374151";
 const HIGHLIGHT_BG = "#fffda6";
-const CSV_BG = "#ffc000";
+const CSV_BG = "#fb923c";
 
 const W = {
   bloqueo: 68,
@@ -39,13 +43,10 @@ const s = StyleSheet.create({
   },
   dataRow: {
     flexDirection: "row",
-    borderBottom: BORDER_LIGHT,
     minHeight: 16,
   },
   intermediateRow: {
     flexDirection: "row",
-    borderBottom: BORDER_LIGHT,
-    backgroundColor: "#f3f4f6",
     minHeight: 16,
   },
   cell: {
@@ -105,9 +106,11 @@ function dotLeader(name: string): string {
   return ".".repeat(Math.max(3, Math.floor(free / DOT7_W)));
 }
 
+const BAR_STYLE = { height: 1.5, backgroundColor: "#111827", marginLeft: -3, marginRight: -3 } as const;
+
 function SepBar() {
   return (
-    <View style={{ height: 1.5, backgroundColor: "#111827", marginBottom: 1 }} />
+    <View style={{ ...BAR_STYLE, marginBottom: 1 }} />
   );
 }
 
@@ -128,26 +131,37 @@ function OrangeLine({ text }: { text: string }) {
   );
 }
 
+function subtractMinutes(timeStr: string, minutes: number): string {
+  const [h, m] = timeStr.split(":").map(Number);
+  const total = ((h * 60 + m - minutes) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 function NoteLine({ text }: { text: string }) {
-  const spaceIdx = text.indexOf(" ");
-  const first = spaceIdx === -1 ? text : text.slice(0, spaceIdx);
-  const rest = spaceIdx === -1 ? "" : text.slice(spaceIdx + 1);
+  const segments = text.split(" | ");
   return (
-    <Text
-      style={{
-        fontSize: 5,
-        fontFamily: "Helvetica-Oblique",
-        color: "#dc2626",
-        marginTop: 1,
-      }}
-    >
-      <Text style={{ fontFamily: "Helvetica-BoldOblique" }}>{first}</Text>
-      {rest ? " " + rest : ""}
+    <Text style={{ fontSize: 5, fontFamily: "Helvetica-Oblique", color: "#dc2626", marginTop: 1 }}>
+      {segments.map((seg, idx) => {
+        const spaceIdx = seg.indexOf(" ");
+        const first = spaceIdx === -1 ? seg : seg.slice(0, spaceIdx);
+        const rest = spaceIdx === -1 ? "" : seg.slice(spaceIdx);
+        return (
+          <Text key={idx}>
+            {idx > 0 ? " | " : ""}
+            <Text style={{ fontFamily: "Helvetica-BoldOblique" }}>{first}</Text>
+            {rest}
+          </Text>
+        );
+      })}
     </Text>
   );
 }
 
-export default function PdfBlocFt({ rows }: Props) {
+export default function PdfBlocFt({ rows, composition, longueur, masse, showTableFooter = true }: Props) {
+  const longueurMasse = [
+    longueur != null ? `${longueur}m` : null,
+    masse != null ? `${masse}t` : null,
+  ].filter(Boolean).join(" - ");
   return (
     <View style={s.container}>
       {/* En-tête colonnes */}
@@ -171,10 +185,19 @@ export default function PdfBlocFt({ rows }: Props) {
           const noteLines = row.notes.flatMap((n) =>
             n.split("\n").filter((l) => l.trim() !== "")
           );
+          const nextRow = rows[i + 1];
+          let noteArrivalHora = "";
+          if (nextRow && nextRow.type === "data" && nextRow.hora !== "") {
+            const stopStr = nextRow.com !== "" ? nextRow.com : nextRow.tecn;
+            const stopMin = stopStr !== "" ? parseInt(stopStr) : 0;
+            if (!isNaN(stopMin) && stopMin > 0) {
+              noteArrivalHora = subtractMinutes(nextRow.hora, stopMin);
+            }
+          }
           return [
             <View key={row.id} style={s.intermediateRow}>
               <View style={[s.cell, { width: W.bloqueo }]} />
-              <View style={[s.cell, { width: W.vmax }]} />
+              <View style={[s.cell, { width: W.vmax, backgroundColor: row.csvHighlight !== "none" ? CSV_BG : undefined }]} />
               <View style={[s.cell, { width: W.sitKm }]} />
               <View style={[s.cell, { flex: 1 }]}>
                 {noteLines.map((line, idx) => (
@@ -182,7 +205,13 @@ export default function PdfBlocFt({ rows }: Props) {
                 ))}
               </View>
               <View style={[s.cell, { width: W.com }]} />
-              <View style={[s.cell, { width: W.hora }]} />
+              <View style={[s.cell, { width: W.hora, justifyContent: "flex-end" }]}>
+                {noteArrivalHora !== "" && (
+                  <Text style={{ fontSize: 7, fontFamily: "Helvetica-Oblique", textAlign: "center" }}>
+                    {noteArrivalHora}
+                  </Text>
+                )}
+              </View>
               <View style={[s.cell, { width: W.tecn }]} />
               <View style={[s.cell, { width: W.conc }]} />
               <View style={[s.cell, { width: W.radio }]} />
@@ -192,11 +221,65 @@ export default function PdfBlocFt({ rows }: Props) {
           ];
         }
 
+        if (row.type === "context") {
+          return [
+            <View key={row.id} style={s.dataRow}>
+              <View style={[s.cell, { width: W.bloqueo }]}>
+                {row.showBloqueoText && (
+                  <Text style={{ fontSize: 7, fontFamily: "DejaVu", textAlign: "center" }}>
+                    {row.bloqueo}
+                  </Text>
+                )}
+              </View>
+              <View style={[s.cell, { width: W.vmax, backgroundColor: row.csvHighlight !== "none" ? CSV_BG : row.highlight ? HIGHLIGHT_BG : undefined }]}>
+                {row.showVmaxText && (
+                  <Text style={{ fontSize: 7, fontFamily: "Helvetica", textAlign: "center" }}>
+                    {row.vmaxDisplayValue}
+                  </Text>
+                )}
+              </View>
+              <View style={[s.cell, { width: W.sitKm }]} />
+              <View style={[s.cell, { flex: 1 }]} />
+              <View style={[s.cell, { width: W.com }]} />
+              <View style={[s.cell, { width: W.hora }]} />
+              <View style={[s.cell, { width: W.tecn }]} />
+              <View style={[s.cell, { width: W.conc }]} />
+              <View style={[s.cell, { width: W.radio }]}>
+                {row.showRadioText && (
+                  <Text style={{ fontSize: 7, fontFamily: "DejaVu", textAlign: "center" }}>
+                    {row.radio}
+                  </Text>
+                )}
+              </View>
+              <View style={[s.cell, { width: W.rampCaract }]}>
+                {row.showRcText && (
+                  <Text style={{ fontSize: 7, fontFamily: "Helvetica", textAlign: "center" }}>
+                    {row.rampCaract}
+                  </Text>
+                )}
+              </View>
+              <View style={[s.cellLast, { width: W.etcs }]} />
+            </View>,
+          ];
+        }
+
         const hasNextDataRow = rows.slice(i + 1).some((r) => r.type === "data");
+
+        const nextDataRowIdx = rows.findIndex((r, idx) => idx > i && r.type === "data");
+        const nextDataRow = nextDataRowIdx !== -1 ? rows[nextDataRowIdx] : undefined;
+        const hasNoteJustBeforeNextData = nextDataRowIdx > i + 1 && rows[nextDataRowIdx - 1].type === "note";
+        let arrivalHora = "";
+        if (nextDataRow && nextDataRow.hora !== "") {
+          const stopStr = nextDataRow.com !== "" ? nextDataRow.com : nextDataRow.tecn;
+          const stopMin = stopStr !== "" ? parseInt(stopStr) : 0;
+          if (!isNaN(stopMin) && stopMin > 0) {
+            arrivalHora = subtractMinutes(nextDataRow.hora, stopMin);
+          }
+        }
 
         const hl = row.highlight;
         const hlBg = hl ? HIGHLIGHT_BG : undefined;
-        const vmaxBg = row.csv ? CSV_BG : undefined;
+
         const hasStation = row.dependencia.trim() !== "";
         const inlineNotes = row.notes.flatMap((n) =>
           n.split("\n").filter((l) => l.trim() !== "")
@@ -207,7 +290,7 @@ export default function PdfBlocFt({ rows }: Props) {
             {/* Bloqueo : barre centrée sur la 1ère ligne du groupe (sauf 1ère/dernière), texte centré sur la ligne du milieu */}
             <View style={[s.cell, { width: W.bloqueo }]}>
               {row.showBloqueoBar && (
-                <View style={{ height: 1.5, backgroundColor: "#111827" }} />
+                <View style={BAR_STYLE} />
               )}
               {row.showBloqueoText && (
                 <Text style={{ fontSize: 7, fontFamily: "DejaVu", textAlign: "center" }}>
@@ -216,10 +299,14 @@ export default function PdfBlocFt({ rows }: Props) {
               )}
             </View>
 
-            {/* V Max : barre si changement de vitesse, fond orange si CSV */}
-            <View
-              style={[s.cell, { width: W.vmax, backgroundColor: vmaxBg }]}
-            >
+            {/* V Max : barre si changement de vitesse + fond orange si CSV */}
+            <View style={[s.cell, { width: W.vmax, backgroundColor: row.csvHighlight === "full" ? CSV_BG : undefined }]}>
+              {row.csvHighlight === "lower" && (
+                <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 8, backgroundColor: CSV_BG }} />
+              )}
+              {row.csvHighlight === "upper" && (
+                <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 8, backgroundColor: CSV_BG }} />
+              )}
               {row.showVBar && <SepBar />}
               {row.showVmaxText && (
                 <Text
@@ -284,16 +371,17 @@ export default function PdfBlocFt({ rows }: Props) {
             <View
               style={[s.cell, { width: W.hora, backgroundColor: hlBg }]}
             >
-              <Text
-                style={{
-                  fontSize: 7,
-                  fontFamily: row.hora !== "" ? "Helvetica-Bold" : "Helvetica",
-                  textAlign: "center",
-                  color: row.hora !== "" ? "#111827" : "#d1d5db",
-                }}
-              >
-                {row.hora !== "" ? row.hora : "—"}
-              </Text>
+              {row.hora !== "" && (
+                <Text
+                  style={{
+                    fontSize: 7,
+                    fontFamily: "Helvetica-Bold",
+                    textAlign: "center",
+                  }}
+                >
+                  {row.hora}
+                </Text>
+              )}
             </View>
 
             {/* Técn */}
@@ -319,7 +407,7 @@ export default function PdfBlocFt({ rows }: Props) {
             {/* Radio : barre centrée, valeur au milieu du groupe */}
             <View style={[s.cell, { width: W.radio }]}>
               {row.showRadioBar && (
-                <View style={{ height: 1.5, backgroundColor: "#111827" }} />
+                <View style={BAR_STYLE} />
               )}
               {row.showRadioText && (
                 <Text style={{ fontSize: 7, fontFamily: "DejaVu", textAlign: "center" }}>
@@ -331,7 +419,7 @@ export default function PdfBlocFt({ rows }: Props) {
             {/* Rampe Caract. : barre centrée, valeur au milieu du groupe */}
             <View style={[s.cell, { width: W.rampCaract }]}>
               {row.showRcBar && (
-                <View style={{ height: 1.5, backgroundColor: "#111827" }} />
+                <View style={BAR_STYLE} />
               )}
               {row.showRcText && (
                 <Text style={{ fontSize: 7, fontFamily: "Helvetica", textAlign: "center" }}>
@@ -357,7 +445,7 @@ export default function PdfBlocFt({ rows }: Props) {
                       </Text>
                     )}
                   </View>
-                  <View style={[s.cell, { width: W.vmax }]}>
+                  <View style={[s.cell, { width: W.vmax, backgroundColor: row.csvHighlight !== "none" && row.csv ? CSV_BG : undefined }]}>
                     {row.vmaxTextBelow !== "" && (
                       <Text style={{ fontSize: 7, fontFamily: "Helvetica", textAlign: "center" }}>
                         {row.vmaxTextBelow}
@@ -372,7 +460,13 @@ export default function PdfBlocFt({ rows }: Props) {
                       ))}
                   </View>
                   <View style={[s.cell, { width: W.com }]} />
-                  <View style={[s.cell, { width: W.hora }]} />
+                  <View style={[s.cell, { width: W.hora, justifyContent: "flex-end" }]}>
+                    {arrivalHora !== "" && !hasNoteJustBeforeNextData && (
+                      <Text style={{ fontSize: 7, fontFamily: "Helvetica-Oblique", textAlign: "center" }}>
+                        {arrivalHora}
+                      </Text>
+                    )}
+                  </View>
                   <View style={[s.cell, { width: W.tecn }]} />
                   <View style={[s.cell, { width: W.conc }]} />
                   <View style={[s.cell, { width: W.radio }]}>
@@ -395,6 +489,22 @@ export default function PdfBlocFt({ rows }: Props) {
             : []),
         ];
       })}
+
+      {/* Ligne footer : composition + longueur/masse (dernière page seulement) */}
+      {showTableFooter && (
+        <View style={{ flexDirection: "row", borderTop: BORDER_MAIN, minHeight: 20 }}>
+          <View style={{ width: W.bloqueo + W.vmax + W.sitKm, backgroundColor: HIGHLIGHT_BG, justifyContent: "center", alignItems: "center", borderRight: BORDER_LIGHT }}>
+            <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", textAlign: "center" }}>
+              {composition}
+            </Text>
+          </View>
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+            <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", textAlign: "center" }}>
+              {longueurMasse}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

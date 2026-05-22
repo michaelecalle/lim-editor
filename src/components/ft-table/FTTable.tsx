@@ -567,7 +567,7 @@ function renderCellContent(
 }
 
 export default function FTTable({
-  title = "Tableau FT",
+  title = "Données ligne",
   titleBadge,
   directionLabel,
   sourceStatus,

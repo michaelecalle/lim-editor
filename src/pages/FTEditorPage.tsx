@@ -39,9 +39,11 @@ import { publishLtvNormalizedData } from "../modules/ft-editor/api/ltvApi";
 import { HORAIRE_COLUMNS } from "../modules/ft-editor/constants/ftColumns";
 import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRows";
 import { areSourceTablesEqual } from "../modules/ft-editor/utils/areSourceTablesEqual";
+import { detectCsvZones } from "../modules/ft-editor/utils/csvZoneDetection";
 import { PDFViewer } from "@react-pdf/renderer";
 import LimPdf from "../components/pdf/LimPdf";
 import type { PdfFtRow, PdfLtvRow } from "../components/pdf/LimPdf";
+import PdfExportPanel from "../components/export/PdfExportPanel";
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
 type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT";
@@ -1942,8 +1944,47 @@ export default function FTEditorPage() {
       }
     }
 
-    // Gares voyageurs (normalisées : minuscules, sans accents, sans caractères non-alphanumériques)
-    const PASSENGER_STATIONS = new Set(["barcelonasants", "girona", "figueresvilafant", "perpignan"]);
+    // Gares voyageurs : correspondance exacte sur le champ dependencia
+    const PASSENGER_STATIONS = new Set([
+      "PERPIGNAN",
+      "FIGUERES-VILAFANT",
+      "GIRONA",
+      "BARCELONA SANTS",
+      "CAN TUNIS AV",
+    ]);
+
+    // Détection des zones CSV et construction du map id → highlight
+    const csvZones = detectCsvZones(rawRows, exportDirection === "SUD_NORD" ? "sudNord" : "nordSud");
+
+    const csvHighlightMap = new Map<string, "lower" | "full" | "upper">();
+    const csvTrueIdSet = new Set<string>();
+    const csvEndIdSet = new Set<string>();
+    for (const zone of csvZones.filter(z => !z.startsAtFirstLine)) {
+      zone.csvTrueIds.forEach((id, idx) => {
+        csvTrueIdSet.add(id);
+        csvHighlightMap.set(id, idx === 0 ? "lower" : "full");
+      });
+      if (zone.endId) {
+        csvEndIdSet.add(zone.endId);
+        csvHighlightMap.set(zone.endId, "upper");
+      }
+    }
+
+    // Propager l'état de zone aux notes en parcourant dans l'ordre du fichier
+    let inZone = false;
+    for (const row of rawRows) {
+      if (row.type === "data") {
+        if (csvTrueIdSet.has(row.id)) {
+          inZone = true;
+        } else if (csvEndIdSet.has(row.id)) {
+          inZone = false;
+        } else {
+          inZone = false;
+        }
+      } else {
+        if (inZone) csvHighlightMap.set(row.id, "full");
+      }
+    }
 
     let dataRowIndex = 0;
 
@@ -1987,7 +2028,7 @@ export default function FTEditorPage() {
       const normDep = stripAccents(dep);
       const normOrigin = stripAccents(origin);
       const normDest = stripAccents(destination);
-      const isPassengerStation = PASSENGER_STATIONS.has(normDep);
+      const isPassengerStation = PASSENGER_STATIONS.has(dep);
       const highlight =
         row.type === "data" &&
         ((isFirstRow || isLastRow)
@@ -2005,8 +2046,9 @@ export default function FTEditorPage() {
       const showVmaxText = vmaxMiddleIds.has(row.id);
       const vmaxDisplayValue = vmaxDisplayValueMap.get(row.id) ?? "";
       const vmaxTextBelow = vmaxTextBelowMap.get(row.id) ?? "";
+      const csvHighlight = csvHighlightMap.get(row.id) ?? "none";
 
-      return { ...row, showBloqueo, showBloqueoBar, showBloqueoText, bloqueoTextBelow, showRadio, showRadioBar, showRadioText, radioTextBelow, showVBar, showVmaxText, vmaxDisplayValue, vmaxTextBelow, showRcBar, showRcText, rampCaractTextBelow, highlight };
+      return { ...row, showBloqueo, showBloqueoBar, showBloqueoText, bloqueoTextBelow, showRadio, showRadioBar, showRadioText, radioTextBelow, showVBar, showVmaxText, vmaxDisplayValue, vmaxTextBelow, showRcBar, showRcText, rampCaractTextBelow, highlight, csvHighlight };
     });
   }, [parsedSource, exportDirection, exportVariant]);
 
@@ -2031,6 +2073,34 @@ export default function FTEditorPage() {
     }));
   }, [ltvNormalizedRows]);
 
+  // LTV filtrées sur le parcours effectif du train (overlap avec [minPk, maxPk] des lignes FT)
+  const exportLtvRowsFiltered = useMemo((): PdfLtvRow[] => {
+    const parsePk = (s: string): number | null => {
+      const n = parseFloat(s.replace(",", ".").trim());
+      return isNaN(n) ? null : n;
+    };
+
+    const pkValues = exportFtRows
+      .filter((r) => r.type === "data")
+      .map((r) => parsePk(r.pkInterne))
+      .filter((pk): pk is number => pk !== null);
+
+    if (pkValues.length === 0) return exportLtvRows;
+
+    const routeMinPk = Math.min(...pkValues);
+    const routeMaxPk = Math.max(...pkValues);
+
+    return exportLtvRows.filter((ltv) => {
+      const pkIni = parsePk(ltv.kmIni);
+      const pkFin = parsePk(ltv.kmFin);
+      // Sécurité : si PK illisible, on affiche plutôt que de masquer par erreur
+      if (pkIni === null || pkFin === null) return true;
+      const minPk = Math.min(pkIni, pkFin);
+      const maxPk = Math.max(pkIni, pkFin);
+      return maxPk >= routeMinPk && minPk <= routeMaxPk;
+    });
+  }, [exportFtRows, exportLtvRows]);
+
   const exportFtRowsFinal = useMemo((): PdfFtRow[] => {
     const parsePk = (s: string): number | null => {
       const n = parseFloat(s.replace(",", ".").trim());
@@ -2050,7 +2120,7 @@ export default function FTEditorPage() {
 
     // Association LTV → ligne FT par proximité de PK
     const ltvNoteMap = new Map<string, string[]>();
-    for (const ltv of exportLtvRows) {
+    for (const ltv of exportLtvRowsFiltered) {
       const pkIni = parsePk(ltv.kmIni);
       const pkFin = parsePk(ltv.kmFin);
       if (pkIni === null || pkFin === null) continue;
@@ -2105,7 +2175,7 @@ export default function FTEditorPage() {
     }
 
     return finalRows;
-  }, [exportFtRows, exportLtvRows, exportDirection]);
+  }, [exportFtRows, exportLtvRowsFiltered, exportDirection]);
 
   const exportVariantIndex = useMemo(() => {
     if (!exportTrainData || !exportVariant) return -1;
@@ -6015,8 +6085,8 @@ export default function FTEditorPage() {
               }}
             >
               {[
-                { id: "FT" as const, label: "Tableau FT" },
-                { id: "HORAIRE" as const, label: "Tableau horaire" },
+                { id: "FT" as const, label: "Données ligne" },
+                { id: "HORAIRE" as const, label: "Données horaires" },
                 { id: "LTV" as const, label: "LTV" },
                 { id: "EXPORT" as const, label: "Export" },
               ].map((tab) => {
@@ -6388,7 +6458,7 @@ export default function FTEditorPage() {
                   }}
                 >
                   <FTTable
-                    title="Tableau horaire"
+                    title="Données horaires"
                     titleBadge={
                       isSelectedTrainUnpublished ? (
                         <span
@@ -6440,6 +6510,17 @@ export default function FTEditorPage() {
               </>
             ) : activeTab === "EXPORT" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* Titre Aperçu */}
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: "#111827",
+                  }}
+                >
+                  Aperçu
+                </div>
+
                 {/* Titre section champs éditables */}
                 <div
                   style={{
@@ -6620,7 +6701,7 @@ export default function FTEditorPage() {
                       ligne={exportVariant?.meta.ligne?.trim() ?? ""}
                       longueur={exportLongueur}
                       masse={exportMasse}
-                      ltvRows={exportLtvRows}
+                      ltvRows={exportLtvRowsFiltered}
                       ftRows={exportFtRowsFinal}
                     />
                   </PDFViewer>
@@ -8094,43 +8175,15 @@ export default function FTEditorPage() {
                 border: "1px solid #d1d5db",
                 borderRadius: 16,
                 background: "#ffffff",
-                display: "flex",
-                flexDirection: "column",
-                gap: 10,
               }}
             >
-              <button
-                type="button"
-                disabled
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: 10,
-                  border: "1px solid #d1d5db",
-                  background: "#f3f4f6",
-                  color: "#9ca3af",
-                  fontWeight: 700,
-                  cursor: "not-allowed",
-                }}
-              >
-                Télécharger ce PDF
-              </button>
-              <button
-                type="button"
-                disabled
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: 10,
-                  border: "1px solid #d1d5db",
-                  background: "#f3f4f6",
-                  color: "#9ca3af",
-                  fontWeight: 700,
-                  cursor: "not-allowed",
-                }}
-              >
-                Télécharger tous les PDF du jour
-              </button>
+              <PdfExportPanel
+                availableTrainNumbers={availableTrainNumbers}
+                parsedSource={parsedSource}
+                ltvNormalizedRows={ltvNormalizedRows}
+                todayIso={todayIso}
+                tomorrowIso={tomorrowIso}
+              />
             </div>
           ) : (
             <div
@@ -8160,7 +8213,7 @@ export default function FTEditorPage() {
                   marginBottom: 20,
                 }}
               >
-                {isPublishing ? "Publication en cours..." : "Publier les LTV"}
+                {isPublishing ? "Publication en cours..." : "Publier / Confirmer les LTV"}
               </button>
 
               <button
