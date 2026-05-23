@@ -1540,6 +1540,18 @@ export default function FTEditorPage() {
     }
   }, [availableTrainNumbers, exportTrainNumber]);
 
+  // Quand on bascule sur l'onglet Export, synchroniser automatiquement
+  // le train sélectionné dans l'onglet Horaire
+  useEffect(() => {
+    if (
+      activeTab === "EXPORT" &&
+      selectedTrainNumber !== "" &&
+      availableTrainNumbers.includes(selectedTrainNumber)
+    ) {
+      setExportTrainNumber(selectedTrainNumber);
+    }
+  }, [activeTab, selectedTrainNumber, availableTrainNumbers]);
+
   useEffect(() => {
     setExportVariantOverrideIndex(null);
   }, [exportDate, exportTrainNumber]);
@@ -4465,7 +4477,7 @@ export default function FTEditorPage() {
                 { id: "FT" as const, label: "Données ligne" },
                 { id: "HORAIRE" as const, label: "Données horaires" },
                 { id: "LTV" as const, label: "LTV" },
-                { id: "EXPORT" as const, label: "Export" },
+                { id: "EXPORT" as const, label: "Export LIM PDF" },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
 
@@ -5515,6 +5527,7 @@ export default function FTEditorPage() {
                 ltvNormalizedRows={ltvNormalizedRows}
                 todayIso={todayIso}
                 tomorrowIso={tomorrowIso}
+                activeTrainNumber={exportTrainNumber}
               />
             </div>
           ) : (

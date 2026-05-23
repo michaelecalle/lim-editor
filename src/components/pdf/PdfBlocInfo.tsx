@@ -35,7 +35,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   yellow: {
-    backgroundColor: "#fffda6",
+    backgroundColor: "#fde047",
   },
   label: {
     fontSize: 6,
@@ -129,7 +129,7 @@ export default function PdfBlocInfo({
           <View style={{ padding: "2pt 3pt", borderBottom: "0.5pt solid #374151" }}>
             <Text style={s.label}>COMPOSICIÓN</Text>
           </View>
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fffda6" }}>
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fde047" }}>
             <Text style={s.valueLg}>{composition}</Text>
           </View>
         </View>

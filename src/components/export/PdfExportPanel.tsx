@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import JSZip from "jszip";
 import { pdf } from "@react-pdf/renderer";
 import LimPdf from "../pdf/LimPdf";
@@ -14,6 +14,7 @@ type Props = {
   ltvNormalizedRows: LtvRowForExport[];
   todayIso: string;
   tomorrowIso: string;
+  activeTrainNumber: string;
 };
 
 const BTN_BASE: React.CSSProperties = {
@@ -47,9 +48,17 @@ export default function PdfExportPanel({
   ltvNormalizedRows,
   todayIso,
   tomorrowIso,
+  activeTrainNumber,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState<string>(todayIso);
   const [selectedTrains, setSelectedTrains] = useState<Set<string>>(new Set());
+
+  // Quand le train actif de l'onglet Export change, sélectionner automatiquement ce train
+  useEffect(() => {
+    if (activeTrainNumber !== "" && availableTrainNumbers.includes(activeTrainNumber)) {
+      setSelectedTrains(new Set([activeTrainNumber]));
+    }
+  }, [activeTrainNumber, availableTrainNumbers]);
   const [showTomorrowModal, setShowTomorrowModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<"pdf" | "zip" | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
