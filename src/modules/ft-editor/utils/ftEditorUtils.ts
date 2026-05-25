@@ -1114,6 +1114,14 @@ export function normalizeLtvCode(value: string): string {
   return digits.padStart(9, "0");
 }
 
+export function normalizeLtvFieldForComparison(value: string, field: string): string {
+  let v = (value ?? "").trim().normalize("NFKC");
+  if (field === "via") {
+    v = v.replace(/l/g, "I");
+  }
+  return v;
+}
+
 export function formatLtvTextInput(
   field: LtvEditorTextField,
   value: string

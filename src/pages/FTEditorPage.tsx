@@ -98,6 +98,7 @@ import {
   normalizeLtvKm,
   formatLtvDecimalKmInput,
   normalizeLtvCode,
+  normalizeLtvFieldForComparison,
   formatLtvTextInput,
   formatAdifTextValue,
   formatAdifLtvSection,
@@ -3584,26 +3585,48 @@ export default function FTEditorPage() {
     (rowId: string, field: LtvEditorTextField, nextValue: string) => {
       const formattedValue = formatLtvTextInput(field, nextValue);
 
+      // Index fusionné pour comparaison (construit une seule fois par appel)
+      const fusedByCode = new Map(
+        ltvFusedRows.map((r) => [normalizeLtvCode(r.code), r])
+      );
+
       setLtvNormalizedRows((previous) =>
-        previous.map((row) =>
-          row.id === rowId
-            ? {
-                ...row,
-                [field]: formattedValue,
-                status: row.status === "added" ? "added" : "modified",
-                editedFields:
-                  row.origin === "adif"
-                    ? {
-                        ...row.editedFields,
-                        [field]: true,
-                      }
-                    : row.editedFields,
-              }
-            : row
-        )
+        previous.map((row) => {
+          if (row.id !== rowId) return row;
+
+          const base = {
+            ...row,
+            [field]: formattedValue,
+            status: row.status === "added" ? "added" : "modified",
+          } as typeof row;
+
+          if (row.origin !== "adif") return base;
+
+          // Comparer avec la valeur du fusionné — retire editedFields si identique
+          const fusedRow = fusedByCode.get(normalizeLtvCode(row.code));
+          const fusedValue = fusedRow ? ((fusedRow[field] as string) ?? "") : "";
+          const valuesMatch =
+            normalizeLtvFieldForComparison(formattedValue, field) ===
+            normalizeLtvFieldForComparison(fusedValue, field);
+
+          const nextEditedFields = { ...(row.editedFields ?? {}) };
+          if (valuesMatch) {
+            delete nextEditedFields[field];
+          } else {
+            nextEditedFields[field] = true;
+          }
+
+          return {
+            ...base,
+            editedFields:
+              Object.keys(nextEditedFields).length > 0
+                ? nextEditedFields
+                : undefined,
+          };
+        })
       );
     },
-    []
+    [ltvFusedRows]
   );
 
   const handleNormalizeLtvCodeField = useCallback((rowId: string) => {
