@@ -1,0 +1,31 @@
+/* ── Indicateurs visuels clignotants du tableau LTV ─────────────────────── */
+
+/* Croix rouge clignotante : ligne normalisée orpheline (plus dans l'ADIF) */
+@keyframes ltv-blink-delete {
+  0%, 49% { color: #dc2626; }
+  50%, 100% { color: transparent; }
+}
+
+/* Liseret gauche amber clignotant : ligne normalisée divergente par rapport à l'ADIF */
+@keyframes ltv-blink-review {
+  0%, 100% { box-shadow: inset 5px 0 0 #f59e0b; }
+  50%       { box-shadow: inset 5px 0 0 transparent; }
+}
+
+/* Flèche verte clignotante : ligne ADIF non encore importée dans le normalisé */
+@keyframes ltv-blink-import {
+  0%, 49% { color: #16a34a; }
+  50%, 100% { color: transparent; }
+}
+
+.ltv-orphan-btn {
+  animation: ltv-blink-delete 0.9s step-end infinite;
+}
+
+.ltv-review-cell {
+  animation: ltv-blink-review 1.2s ease-in-out infinite;
+}
+
+.ltv-import-pending-btn {
+  animation: ltv-blink-import 0.9s step-end infinite;
+}

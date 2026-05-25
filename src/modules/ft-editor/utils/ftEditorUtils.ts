@@ -35,6 +35,7 @@ export type LtvEditorRow = {
   csv: boolean;
   observaciones: string;
   editedFields?: Partial<Record<string, boolean>>;
+  vatardFields?: Partial<Record<string, boolean>>;
 };
 
 export type LtvAdifApiEntry = {
@@ -156,6 +157,42 @@ export const LTV_TABLE_HEADERS = [
 export const LTV_ADIF_ENDPOINT_URL = "https://lim2.vercel.app/api/ltv";
 export const LTV_ADIF_REFERENCE_LINE = "050";
 export const LTV_ADIF_REFERENCE_PK = 616;
+export const LTV_VATARD_ENDPOINT_URL = "https://lim2.vercel.app/api/ltv-vatard";
+
+export type VatardApiEntry = {
+  code: string;
+  stations: string;
+  track: string;
+  startKm: string;
+  endKm: string;
+  speed: string;
+  speedNum: number;
+  reason: string;
+  startDateTime: string;
+  endDateTime: string;
+  csv: boolean;
+  comment: string;
+  firstAppearanceDate: string;
+  lastSeen: string;
+  active: boolean;
+  designSpeed: number;
+  reductionPercentage: number;
+  kmLength: number;
+  line: string;
+};
+
+export type LtvVatardApiResponse =
+  | {
+      ok: true;
+      source: string;
+      fetchedAt: string;
+      total: number;
+      raw: VatardApiEntry[];
+    }
+  | {
+      ok: false;
+      error?: string;
+    };
 
 // ── Utility functions ─────────────────────────────────────────────────────────
 
@@ -1254,13 +1291,61 @@ export function mapAdifEntryToLtvEditorRow(entry: LtvAdifApiEntry): LtvEditorRow
   };
 }
 
+function normalizeViaForVatardMatching(via: string): string {
+  return via.trim().replace(/l/gi, "I").toUpperCase();
+}
+
+function vatardEntryMatchKey(entry: VatardApiEntry): string {
+  return `${normalizeLtvKm(entry.startKm)}|${normalizeLtvKm(entry.endKm)}|${String(entry.speedNum)}|${normalizeViaForVatardMatching(entry.track)}`;
+}
+
+function adifRowMatchKeyForVatard(row: LtvEditorRow): string {
+  return `${row.kmIni}|${row.kmFin}|${row.speed}|${normalizeViaForVatardMatching(row.via)}`;
+}
+
+export function enrichLtvRowsFromVatard(
+  rows: LtvEditorRow[],
+  vatardEntries: VatardApiEntry[]
+): LtvEditorRow[] {
+  const lookup = new Map<string, VatardApiEntry>();
+  for (const entry of vatardEntries) {
+    lookup.set(vatardEntryMatchKey(entry), entry);
+  }
+
+  return rows.map((row) => {
+    const match = lookup.get(adifRowMatchKeyForVatard(row));
+    if (!match) return row;
+
+    const vatardFields: Partial<Record<string, boolean>> = {};
+    const enriched: LtvEditorRow = { ...row };
+
+    if (!row.motivo.trim() && match.reason.trim()) {
+      enriched.motivo = match.reason;
+      vatardFields.motivo = true;
+    }
+    if (!row.observaciones.trim() && match.comment.trim()) {
+      enriched.observaciones = match.comment;
+      vatardFields.observaciones = true;
+    }
+    if (!row.csv && match.csv === true) {
+      enriched.csv = true;
+      vatardFields.csv = true;
+    }
+
+    if (Object.keys(vatardFields).length > 0) {
+      enriched.vatardFields = vatardFields;
+    }
+    return enriched;
+  });
+}
+
 export function getLtvNormalizedRowBackground(row: LtvEditorRow): string {
   if (row.origin === "adif") {
-    return "#ecfdf5";
+    return "#ecfdf5"; // vert — importé depuis ADIF
   }
 
   if (row.origin === "manual") {
-    return "#eff6ff";
+    return "#fce7f3"; // rose — ajout manuel
   }
 
   return "#f9fafb";
@@ -1373,20 +1458,21 @@ export function readLtvFlagField(value: unknown): boolean {
   return value === true;
 }
 
+function readLtvFieldMap(value: unknown): Partial<Record<string, boolean>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Partial<Record<string, boolean>> = {};
+  for (const [field, flag] of Object.entries(value)) {
+    if (flag === true) result[field] = true;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export function readLtvEditedFields(value: unknown): Partial<Record<string, boolean>> | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
+  return readLtvFieldMap(value);
+}
 
-  const editedFields: Partial<Record<string, boolean>> = {};
-
-  for (const [field, isEdited] of Object.entries(value)) {
-    if (isEdited === true) {
-      editedFields[field] = true;
-    }
-  }
-
-  return Object.keys(editedFields).length > 0 ? editedFields : undefined;
+export function readLtvVatardFields(value: unknown): Partial<Record<string, boolean>> | undefined {
+  return readLtvFieldMap(value);
 }
 
 export function readLtvNormalizedRowsFromFile(data: unknown): LtvEditorRow[] {
@@ -1438,6 +1524,7 @@ export function readLtvNormalizedRowsFromFile(data: unknown): LtvEditorRow[] {
         csv: readLtvFlagField(rawRow.csv),
         observaciones: readLtvTextField(rawRow.observaciones, "observaciones"),
         editedFields: readLtvEditedFields(rawRow.editedFields),
+        vatardFields: readLtvVatardFields(rawRow.vatardFields),
       };
     })
     .filter((row): row is LtvEditorRow => row !== null);

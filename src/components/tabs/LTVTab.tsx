@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
+import "./LTVTab.css";
 import {
   getLtvInputMode,
   getLtvNormalizedRowBackground,
@@ -14,6 +15,56 @@ import type {
   LtvEditorTextField,
   LtvEditorFlagField,
 } from "../../modules/ft-editor/utils/ftEditorUtils";
+
+// Champs texte comparés pour détecter une divergence (le code est l'identifiant, pas comparé)
+const TEXT_FIELDS_FOR_DIFF = [
+  ...LTV_TEXT_FIELDS_BEFORE_FLAGS.filter((f) => f !== "code"),
+  "observaciones" as LtvEditorTextField,
+] as const;
+
+type DivergentField = { field: string; adifVal: string; normVal: string };
+
+/**
+ * Retourne la liste des champs divergents entre normalisé et ADIF.
+ * Règle : ADIF non-vide ≠ normalisé → différence.
+ *         Normalisé non-vide, ADIF vide → PAS une différence (enrichissement local).
+ * Les champs édités manuellement (fond bleu) sont exclus : l'utilisateur a intentionnellement
+ * surchargé la valeur ADIF.
+ */
+function normalizeForComparison(value: string, field: string): string {
+  let v = value.trim().normalize("NFKC");
+  if (field === "via") {
+    // L'ADIF encode les numéros de voie avec 'l' minuscule (U+006C) au lieu de 'I' majuscule (U+0049)
+    v = v.replace(/l/g, "I");
+  }
+  return v;
+}
+
+function getAdifDivergentFields(
+  normalized: LtvEditorRow,
+  adif: LtvEditorRow
+): DivergentField[] {
+  const result: DivergentField[] = [];
+  for (const field of TEXT_FIELDS_FOR_DIFF) {
+    if (normalized.editedFields?.[field]) continue; // champ édité manuellement → ignoré
+    const adifVal = normalizeForComparison(adif[field] as string, field);
+    const normVal = normalizeForComparison(normalized[field] as string, field);
+    if (adifVal !== "" && adifVal !== normVal) {
+      result.push({ field, adifVal, normVal });
+    }
+  }
+  for (const field of LTV_FLAG_FIELDS) {
+    if (normalized.editedFields?.[field]) continue;
+    if (adif[field] === true && normalized[field] === false) {
+      result.push({ field, adifVal: "✓", normVal: "✗" });
+    }
+  }
+  return result;
+}
+
+function hasAdifDivergence(normalized: LtvEditorRow, adif: LtvEditorRow): boolean {
+  return getAdifDivergentFields(normalized, adif).length > 0;
+}
 
 type LtvNormalizedFileInfo = {
   publishedAt: string;
@@ -39,6 +90,11 @@ type Props = {
   ltvAdifStatus: "idle" | "loading" | "success" | "error";
   ltvAdifMessage: string;
   ltvAdifOtherRows: LtvEditorRow[];
+
+  // Fused table state (ADIF + Vatard enrichment)
+  ltvFusedRows: LtvEditorRow[];
+  ltvVatardStatus: "idle" | "loading" | "success" | "error";
+  ltvVatardMessage: string;
 
   // Normalized row handlers
   onAddLtvNormalizedRow: () => void;
@@ -70,6 +126,9 @@ export default function LTVTab({
   ltvAdifStatus,
   ltvAdifMessage,
   ltvAdifOtherRows,
+  ltvFusedRows,
+  ltvVatardStatus,
+  ltvVatardMessage,
   onAddLtvNormalizedRow,
   onRequestDeleteLtvNormalizedRow,
   onStartLtvRowDrag,
@@ -82,12 +141,24 @@ export default function LTVTab({
   onToggleLtvFlagField,
   onImportLtvAdifRow,
 }: Props) {
+  // Index fusionné par code normalisé — source de référence pour la comparaison
+  const fusedRowByCode = useMemo(() => {
+    if (ltvAdifStatus !== "success") return new Map<string, LtvEditorRow>();
+    const map = new Map<string, LtvEditorRow>();
+    for (const row of ltvFusedRows) {
+      map.set(normalizeLtvCode(row.code), row);
+    }
+    return map;
+  }, [ltvFusedRows, ltvAdifStatus]);
+
   const renderLtvTextCell = useCallback(
     (row: LtvEditorRow, field: LtvEditorTextField) => {
       const background =
-        row.origin === "adif" && row.editedFields?.[field]
-          ? "#eff6ff"
-          : getLtvNormalizedRowBackground(row);
+        row.editedFields?.[field]
+          ? "#fce7f3"  // rose — édition manuelle
+          : row.vatardFields?.[field]
+            ? "#eff6ff"  // bleu — source Vatard
+            : getLtvNormalizedRowBackground(row);
 
       return (
         <td
@@ -138,9 +209,11 @@ export default function LTVTab({
     (row: LtvEditorRow, field: LtvEditorFlagField) => {
       const isChecked = row[field];
       const background =
-        row.origin === "adif" && row.editedFields?.[field]
-          ? "#eff6ff"
-          : getLtvNormalizedRowBackground(row);
+        row.editedFields?.[field]
+          ? "#fce7f3"  // rose — édition manuelle
+          : row.vatardFields?.[field]
+            ? "#eff6ff"  // bleu — source Vatard
+            : getLtvNormalizedRowBackground(row);
 
       return (
         <td
@@ -296,6 +369,7 @@ export default function LTVTab({
                       type="button"
                       onClick={() => onImportLtvAdifRow(row)}
                       title="Importer cette LTV dans le tableau normalisé"
+                      className="ltv-import-pending-btn"
                       style={{
                         width: "100%",
                         minHeight: 32,
@@ -310,25 +384,7 @@ export default function LTVTab({
                       ↑
                     </button>
                   )
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    title="Import non disponible ici pour l'instant"
-                    style={{
-                      width: "100%",
-                      minHeight: 32,
-                      border: "none",
-                      background: "transparent",
-                      color: "#9ca3af",
-                      fontSize: 18,
-                      fontWeight: 900,
-                      cursor: "not-allowed",
-                    }}
-                  >
-                    ↑
-                  </button>
-                )}
+                ) : null}
               </td>
 
               {LTV_TEXT_FIELDS_BEFORE_FLAGS.map((field) =>
@@ -357,6 +413,140 @@ export default function LTVTab({
     [
       onImportLtvAdifRow,
       importedLtvCodeSet,
+      renderLtvReadonlyFlagCell,
+      renderLtvReadonlyTextCell,
+    ]
+  );
+
+  const renderFusedTableRows = useCallback(
+    (rows: LtvEditorRow[], emptyMessage: string, isError = false) =>
+      rows.length === 0 ? (
+        <tr>
+          <td
+            colSpan={19}
+            style={{
+              border: "1px solid #d1d5db",
+              padding: 18,
+              textAlign: "center",
+              color: isError ? "#991b1b" : "#6b7280",
+              background: isError ? "#fef2f2" : "#ffffff",
+              fontWeight: 500,
+            }}
+          >
+            {emptyMessage}
+          </td>
+        </tr>
+      ) : (
+        rows.map((row) => {
+          const isAlreadyImported = importedLtvCodeSet.has(normalizeLtvCode(row.code));
+
+          const rowBg = isAlreadyImported ? "#f9fafb" : "#ffffff";
+          const cellColor = (field: string) =>
+            isAlreadyImported
+              ? "#6b7280"
+              : row.vatardFields?.[field]
+                ? "#2563eb"
+                : "#111827";
+          const flagCheckedColor = (field: string) =>
+            isAlreadyImported
+              ? "#6b7280"
+              : row.vatardFields?.[field]
+                ? "#2563eb"
+                : "#1d4ed8";
+          const hasVatardEnrichment =
+            row.vatardFields != null && Object.keys(row.vatardFields).length > 0;
+
+          return (
+            <tr key={row.id} style={{ opacity: isAlreadyImported ? 0.7 : 1 }}>
+              <td
+                style={{
+                  width: 64,
+                  border: "1px solid #d1d5db",
+                  padding: 0,
+                  background: rowBg,
+                  verticalAlign: "middle",
+                  textAlign: "center",
+                }}
+              />
+
+              <td
+                style={{
+                  width: 48,
+                  border: "1px solid #d1d5db",
+                  padding: 0,
+                  background: rowBg,
+                  verticalAlign: "middle",
+                  textAlign: "center",
+                }}
+              >
+                {isAlreadyImported ? null : (
+                  <button
+                    type="button"
+                    onClick={() => onImportLtvAdifRow(row)}
+                    title="Importer cette LTV dans le tableau normalisé"
+                    className="ltv-import-pending-btn"
+                    style={{
+                      width: "100%",
+                      minHeight: 32,
+                      border: "none",
+                      background: "transparent",
+                      color: "#16a34a",
+                      fontSize: 18,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ↑
+                  </button>
+                )}
+              </td>
+
+              <td
+                style={{
+                  width: 48,
+                  border: "1px solid #d1d5db",
+                  padding: "4px 6px",
+                  background: rowBg,
+                  textAlign: "center",
+                  color: isAlreadyImported
+                    ? "#9ca3af"
+                    : hasVatardEnrichment
+                      ? "#16a34a"
+                      : "#9ca3af",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {hasVatardEnrichment ? "A+V" : "A"}
+              </td>
+
+              {LTV_TEXT_FIELDS_BEFORE_FLAGS.map((field) =>
+                renderLtvReadonlyTextCell(row, field, {
+                  background: rowBg,
+                  color: cellColor(field),
+                })
+              )}
+
+              {LTV_FLAG_FIELDS.map((field) =>
+                renderLtvReadonlyFlagCell(row, field, {
+                  background: rowBg,
+                  checkedColor: flagCheckedColor(field),
+                  uncheckedColor: "#9ca3af",
+                })
+              )}
+
+              {renderLtvReadonlyTextCell(row, "observaciones", {
+                background: rowBg,
+                color: cellColor("observaciones"),
+              })}
+            </tr>
+          );
+        })
+      ),
+    [
+      importedLtvCodeSet,
+      onImportLtvAdifRow,
       renderLtvReadonlyFlagCell,
       renderLtvReadonlyTextCell,
     ]
@@ -557,6 +747,15 @@ export default function LTVTab({
                   const normalizedRowBackground =
                     getLtvNormalizedRowBackground(row);
 
+                  // Indicateurs visuels — comparaison avec le tableau fusionné
+                  const normalizedCode = normalizeLtvCode(row.code);
+                  const fusedMatch = fusedRowByCode.get(normalizedCode);
+                  const isOrphaned =
+                    row.origin !== "manual" && fusedMatch == null && fusedRowByCode.size > 0;
+                  const divergentFields =
+                    fusedMatch != null ? getAdifDivergentFields(row, fusedMatch) : [];
+                  const isReview = divergentFields.length > 0;
+
                   return (
                     <tr
                       key={row.id}
@@ -583,6 +782,7 @@ export default function LTVTab({
                     >
                       <td
                         key={`${row.id}-actions`}
+                        className={isReview ? "ltv-review-cell" : undefined}
                         style={{
                           width: 64,
                           border: "1px solid #d1d5db",
@@ -597,7 +797,14 @@ export default function LTVTab({
                           onClick={() =>
                             onRequestDeleteLtvNormalizedRow(row.id)
                           }
-                          title="Supprimer cette LTV"
+                          title={
+                            isOrphaned
+                              ? "Cette LTV n'existe plus dans le tableau fusionné — envisager la suppression"
+                              : isReview
+                                ? `Divergence fusionné :\n${divergentFields.map((d) => `• ${d.field}: fusionné="${d.adifVal}" | normalisé="${d.normVal}"`).join("\n")}`
+                                : "Supprimer cette LTV"
+                          }
+                          className={isOrphaned ? "ltv-orphan-btn" : undefined}
                           style={{
                             width: "100%",
                             minHeight: 32,
@@ -666,6 +873,158 @@ export default function LTVTab({
                     </tr>
                   );
                 })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Tableau LTV fusionné — Barcelona/Figueras */}
+      <div
+        style={{
+          padding: 16,
+          border: "1px solid #bfdbfe",
+          borderRadius: 16,
+          background: "#ffffff",
+          color: "#111827",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 12,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                marginBottom: 4,
+              }}
+            >
+              Tableau LTV fusionné — Barcelona/Figueras
+            </div>
+            <div
+              style={{
+                color:
+                  ltvVatardStatus === "error"
+                    ? "#991b1b"
+                    : ltvVatardStatus === "success"
+                      ? "#166534"
+                      : "#4b5563",
+                fontSize: 14,
+                fontWeight: ltvVatardStatus === "error" ? 600 : 400,
+              }}
+            >
+              {ltvVatardMessage}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "6px 10px",
+              borderRadius: 999,
+              border: "1px solid #bfdbfe",
+              background: "#eff6ff",
+              color: "#1e40af",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            {ltvFusedRows.length} LTV
+          </div>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width: "100%",
+              minWidth: 1380,
+              borderCollapse: "collapse",
+              tableLayout: "fixed",
+              fontSize: 13,
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    width: 64,
+                    border: "1px solid #d1d5db",
+                    background: "#f3f4f6",
+                    color: "#111827",
+                    padding: "8px 6px",
+                    textAlign: "center",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {" "}
+                </th>
+
+                <th
+                  style={{
+                    width: 48,
+                    border: "1px solid #d1d5db",
+                    background: "#f3f4f6",
+                    color: "#111827",
+                    padding: "8px 6px",
+                    textAlign: "center",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  ↑
+                </th>
+
+                <th
+                  style={{
+                    width: 48,
+                    border: "1px solid #d1d5db",
+                    background: "#f3f4f6",
+                    color: "#111827",
+                    padding: "8px 6px",
+                    textAlign: "center",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Src.
+                </th>
+
+                {LTV_TABLE_HEADERS.map((header) => (
+                  <th
+                    key={`fused-${header}`}
+                    style={{
+                      border: "1px solid #d1d5db",
+                      background: "#f3f4f6",
+                      color: "#111827",
+                      padding: "8px 6px",
+                      textAlign: "left",
+                      fontWeight: 700,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {renderFusedTableRows(
+                ltvFusedRows,
+                ltvVatardStatus === "loading"
+                  ? "Chargement des données Vatard..."
+                  : ltvVatardStatus === "error"
+                    ? ltvVatardMessage
+                    : `Aucune LTV ADIF ligne ${LTV_ADIF_REFERENCE_LINE} chargée pour le moment.`,
+                ltvVatardStatus === "error"
               )}
             </tbody>
           </table>
@@ -803,7 +1162,7 @@ export default function LTVTab({
                     ? ltvAdifMessage
                     : `Aucune LTV ADIF ligne ${LTV_ADIF_REFERENCE_LINE} Barcelona/Figueras chargée pour le moment.`,
                 ltvAdifStatus === "error",
-                true
+                false
               )}
             </tbody>
           </table>

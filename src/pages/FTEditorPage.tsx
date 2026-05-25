@@ -51,9 +51,12 @@ import LTVTab from "../components/tabs/LTVTab";
 import {
   type LtvEditorRow,
   type LtvAdifApiResponse,
+  type LtvVatardApiResponse,
+  type VatardApiEntry,
   type LtvEditorTextField,
   type LtvEditorFlagField,
   LTV_ADIF_ENDPOINT_URL,
+  LTV_VATARD_ENDPOINT_URL,
   LTV_ADIF_REFERENCE_LINE,
   LTV_ADIF_REFERENCE_PK,
   isAdifEntryOnReferenceLine,
@@ -113,6 +116,7 @@ import {
   readLtvNormalizedRowsFromFile,
   readLtvNormalizedFileInfo,
   formatLtvDateTimeForDisplay,
+  enrichLtvRowsFromVatard,
 } from "../modules/ft-editor/utils/ftEditorUtils";
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
@@ -189,6 +193,11 @@ export default function FTEditorPage() {
   });
   const [ltvAdifMessage, setLtvAdifMessage] = useState<string>(
     "Aucune tentative de chargement ADIF."
+  );
+  const [ltvVatardEntries, setLtvVatardEntries] = useState<VatardApiEntry[]>([]);
+  const [ltvVatardStatus, setLtvVatardStatus] = useState<SourceStatus>("idle");
+  const [ltvVatardMessage, setLtvVatardMessage] = useState<string>(
+    "Aucune tentative de chargement Vatard."
   );
   const [pendingLtvDeleteRowId, setPendingLtvDeleteRowId] = useState<
     string | null
@@ -1041,7 +1050,57 @@ export default function FTEditorPage() {
     };
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      setLtvVatardStatus("loading");
+      setLtvVatardMessage("Chargement des données Vatard en cours...");
+      setLtvVatardEntries([]);
+
+      try {
+        const response = await fetch(LTV_VATARD_ENDPOINT_URL);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = (await response.json()) as LtvVatardApiResponse;
+
+        if (!payload.ok) {
+          throw new Error(payload.error ?? "Réponse Vatard invalide.");
+        }
+
+        const entries = Array.isArray(payload.raw) ? payload.raw : [];
+
+        if (cancelled) return;
+
+        setLtvVatardEntries(entries);
+        setLtvVatardStatus("success");
+        setLtvVatardMessage(
+          `${entries.length} entrées Vatard chargées depuis ${payload.source}.`
+        );
+      } catch (error) {
+        if (cancelled) return;
+
+        setLtvVatardEntries([]);
+        setLtvVatardStatus("error");
+        setLtvVatardMessage(
+          error instanceof Error
+            ? `Chargement Vatard échoué : ${error.message}`
+            : "Chargement Vatard échoué : erreur inconnue."
+        );
+      }
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function run() {
@@ -1348,6 +1407,11 @@ export default function FTEditorPage() {
       ltvNormalizedRows.map((row) => normalizeLtvCode(row.code))
     );
   }, [ltvNormalizedRows]);
+
+  const ltvFusedRows = useMemo(
+    () => enrichLtvRowsFromVatard(ltvAdifRows, ltvVatardEntries),
+    [ltvAdifRows, ltvVatardEntries]
+  );
 
   const handleValidateHoraireSelection = useCallback(() => {
     const trimmedOrigin = selectedOrigin.trim();
@@ -4608,6 +4672,9 @@ export default function FTEditorPage() {
                 ltvAdifStatus={ltvAdifStatus}
                 ltvAdifMessage={ltvAdifMessage}
                 ltvAdifOtherRows={ltvAdifOtherRows}
+                ltvFusedRows={ltvFusedRows}
+                ltvVatardStatus={ltvVatardStatus}
+                ltvVatardMessage={ltvVatardMessage}
                 onAddLtvNormalizedRow={handleAddLtvNormalizedRow}
                 onRequestDeleteLtvNormalizedRow={handleRequestDeleteLtvNormalizedRow}
                 onStartLtvRowDrag={handleStartLtvRowDrag}
