@@ -3685,26 +3685,45 @@ export default function FTEditorPage() {
 
   const handleToggleLtvFlagField = useCallback(
     (rowId: string, field: LtvEditorFlagField) => {
+      const fusedByCode = new Map(
+        ltvFusedRows.map((r) => [normalizeLtvCode(r.code), r])
+      );
+
       setLtvNormalizedRows((previous) =>
-        previous.map((row) =>
-          row.id === rowId
-            ? {
-                ...row,
-                [field]: !row[field],
-                status: row.status === "added" ? "added" : "modified",
-                editedFields:
-                  row.origin === "adif"
-                    ? {
-                        ...row.editedFields,
-                        [field]: true,
-                      }
-                    : row.editedFields,
-              }
-            : row
-        )
+        previous.map((row) => {
+          if (row.id !== rowId) return row;
+
+          const newValue = !row[field];
+          const base = {
+            ...row,
+            [field]: newValue,
+            status: row.status === "added" ? "added" : "modified",
+          } as typeof row;
+
+          if (row.origin !== "adif") return base;
+
+          const fusedRow = fusedByCode.get(normalizeLtvCode(row.code));
+          const fusedValue = fusedRow ? (fusedRow[field] as boolean) : false;
+          const valuesMatch = newValue === fusedValue;
+
+          const nextEditedFields = { ...(row.editedFields ?? {}) };
+          if (valuesMatch) {
+            delete nextEditedFields[field];
+          } else {
+            nextEditedFields[field] = true;
+          }
+
+          return {
+            ...base,
+            editedFields:
+              Object.keys(nextEditedFields).length > 0
+                ? nextEditedFields
+                : undefined,
+          };
+        })
       );
     },
-    []
+    [ltvFusedRows]
   );
 
   const handleAddLtvNormalizedRow = useCallback(() => {
