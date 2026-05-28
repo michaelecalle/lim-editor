@@ -5170,6 +5170,15 @@ export default function FTEditorPage() {
                       openVariantValidityEditor.trainNumber === selectedTrainNumber &&
                       openVariantValidityEditor.variantIndex === index;
 
+                    const savedSpecificDates = validity?.specificDates ?? [];
+                    const draftSpecificDates = variantValidityDraft.specificDates ?? [];
+                    const displaySpecificDates = isEditorOpen
+                      ? draftSpecificDates
+                      : savedSpecificDates;
+                    const hasSpecificDates =
+                      savedSpecificDates.length > 0 ||
+                      (isEditorOpen && draftSpecificDates.length > 0);
+
                     return (
                       <div
                         key={`variant-${index}`}
@@ -5241,134 +5250,182 @@ export default function FTEditorPage() {
                               VARIANTE {String.fromCharCode(65 + index)}
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
+                            {hasSpecificDates ? (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 4,
+                                  flexWrap: "wrap",
+                                  cursor: "pointer",
+                                }}
+                                onClick={(event) => {
+                                  event.stopPropagation();
 
-                                if (selectedVariantIndex !== index) {
-                                  setSelectedVariantIndexByTrain((previous) => ({
-                                    ...previous,
-                                    [selectedTrainNumber]: index,
-                                  }));
-                                  return;
-                                }
+                                  if (selectedVariantIndex !== index) {
+                                    setSelectedVariantIndexByTrain((previous) => ({
+                                      ...previous,
+                                      [selectedTrainNumber]: index,
+                                    }));
+                                    return;
+                                  }
 
-                                setOpenVariantValidityEditor({
-                                  trainNumber: selectedTrainNumber,
-                                  variantIndex: index,
-                                });
-                              }}
-                              style={{
-                                padding: 0,
-                                border: "none",
-                                background: "transparent",
-                                color: "#374151",
-                                fontSize: 14,
-                                textAlign: "left",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Début : {formatVariantDateForDisplay(startDate)}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-
-                                if (selectedVariantIndex !== index) {
-                                  setSelectedVariantIndexByTrain((previous) => ({
-                                    ...previous,
-                                    [selectedTrainNumber]: index,
-                                  }));
-                                  return;
-                                }
-
-                                setOpenVariantValidityEditor({
-                                  trainNumber: selectedTrainNumber,
-                                  variantIndex: index,
-                                });
-                              }}
-                              style={{
-                                padding: 0,
-                                border: "none",
-                                background: "transparent",
-                                color: "#374151",
-                                fontSize: 14,
-                                textAlign: "left",
-                                cursor: "pointer",
-                              }}
-                            >
-                              Fin : {formatVariantDateForDisplay(endDate)}
-                            </button>
-
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: 4,
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              {dayLabels.map((day) => {
-                                const isActive = isEditorOpen
-                                  ? variantValidityDraft.days[day.key]
-                                  : (days?.[day.key] ?? true);
-
-                                return (
-                                  <button
-                                    key={day.key}
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-
-                                      if (selectedVariantIndex !== index) {
-                                        setSelectedVariantIndexByTrain((previous) => ({
-                                          ...previous,
-                                          [selectedTrainNumber]: index,
-                                        }));
-                                        return;
-                                      }
-
-                                      if (isEditorOpen) {
-                                        setVariantValidityError(null);
-                                        setVariantValidityDraft((previous) => ({
-                                          ...previous,
-                                          days: {
-                                            ...previous.days,
-                                            [day.key]: !previous.days[day.key],
-                                          },
-                                        }));
-                                      } else {
-                                        setOpenVariantValidityEditor({
-                                          trainNumber: selectedTrainNumber,
-                                          variantIndex: index,
-                                        });
-                                      }
-                                    }}
+                                  if (!isEditorOpen) {
+                                    setOpenVariantValidityEditor({
+                                      trainNumber: selectedTrainNumber,
+                                      variantIndex: index,
+                                    });
+                                  }
+                                }}
+                              >
+                                {displaySpecificDates.map((d) => (
+                                  <div
+                                    key={d}
                                     style={{
-                                      minWidth: 22,
-                                      height: 22,
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
+                                      padding: "3px 8px",
                                       borderRadius: 999,
-                                      border: isActive
-                                        ? "1px solid #2563eb"
-                                        : "1px solid #d1d5db",
-                                      background: isActive ? "#dbeafe" : "#f9fafb",
-                                      color: isActive ? "#1d4ed8" : "#9ca3af",
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      cursor: "pointer",
-                                      padding: 0,
+                                      border: "1px solid #2563eb",
+                                      background: "#dbeafe",
+                                      color: "#1d4ed8",
+                                      fontSize: 12,
+                                      fontWeight: 600,
                                     }}
                                   >
-                                    {day.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                                    {formatVariantDateForDisplay(d)}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+
+                                    if (selectedVariantIndex !== index) {
+                                      setSelectedVariantIndexByTrain((previous) => ({
+                                        ...previous,
+                                        [selectedTrainNumber]: index,
+                                      }));
+                                      return;
+                                    }
+
+                                    setOpenVariantValidityEditor({
+                                      trainNumber: selectedTrainNumber,
+                                      variantIndex: index,
+                                    });
+                                  }}
+                                  style={{
+                                    padding: 0,
+                                    border: "none",
+                                    background: "transparent",
+                                    color: "#374151",
+                                    fontSize: 14,
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Début : {formatVariantDateForDisplay(startDate)}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+
+                                    if (selectedVariantIndex !== index) {
+                                      setSelectedVariantIndexByTrain((previous) => ({
+                                        ...previous,
+                                        [selectedTrainNumber]: index,
+                                      }));
+                                      return;
+                                    }
+
+                                    setOpenVariantValidityEditor({
+                                      trainNumber: selectedTrainNumber,
+                                      variantIndex: index,
+                                    });
+                                  }}
+                                  style={{
+                                    padding: 0,
+                                    border: "none",
+                                    background: "transparent",
+                                    color: "#374151",
+                                    fontSize: 14,
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Fin : {formatVariantDateForDisplay(endDate)}
+                                </button>
+
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 4,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  {dayLabels.map((day) => {
+                                    const isActive = isEditorOpen
+                                      ? variantValidityDraft.days[day.key]
+                                      : (days?.[day.key] ?? true);
+
+                                    return (
+                                      <button
+                                        key={day.key}
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+
+                                          if (selectedVariantIndex !== index) {
+                                            setSelectedVariantIndexByTrain((previous) => ({
+                                              ...previous,
+                                              [selectedTrainNumber]: index,
+                                            }));
+                                            return;
+                                          }
+
+                                          if (isEditorOpen) {
+                                            setVariantValidityError(null);
+                                            setVariantValidityDraft((previous) => ({
+                                              ...previous,
+                                              days: {
+                                                ...previous.days,
+                                                [day.key]: !previous.days[day.key],
+                                              },
+                                            }));
+                                          } else {
+                                            setOpenVariantValidityEditor({
+                                              trainNumber: selectedTrainNumber,
+                                              variantIndex: index,
+                                            });
+                                          }
+                                        }}
+                                        style={{
+                                          minWidth: 22,
+                                          height: 22,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          borderRadius: 999,
+                                          border: isActive
+                                            ? "1px solid #2563eb"
+                                            : "1px solid #d1d5db",
+                                          background: isActive ? "#dbeafe" : "#f9fafb",
+                                          color: isActive ? "#1d4ed8" : "#9ca3af",
+                                          fontSize: 11,
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                          padding: 0,
+                                        }}
+                                      >
+                                        {day.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
 
                             {selectedVariantIndex === index ? (
                               <div
