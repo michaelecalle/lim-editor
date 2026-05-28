@@ -216,6 +216,10 @@ function sanitizePublishedTrains(
     const days: Record<string, unknown> = isRecord(record["days"])
       ? (record["days"] as Record<string, unknown>)
       : {};
+    const rawSpecificDates = record["specificDates"];
+    const specificDates = Array.isArray(rawSpecificDates)
+      ? rawSpecificDates.filter((d): d is string => typeof d === "string")
+      : [];
 
     return {
       startDate: asString(record["startDate"]),
@@ -229,6 +233,7 @@ function sanitizePublishedTrains(
         saturday: typeof days["saturday"] === "boolean" ? days["saturday"] : true,
         sunday: typeof days["sunday"] === "boolean" ? days["sunday"] : true,
       },
+      ...(specificDates.length > 0 ? { specificDates } : {}),
     };
   }
 
@@ -438,6 +443,10 @@ export function buildNormalizedFtSourceFileContent(
   function buildCompleteValidity(validity: unknown) {
     const record = isRecord(validity) ? validity : {};
     const days = isRecord(record["days"]) ? record["days"] : {};
+    const rawSpecificDates = record["specificDates"];
+    const specificDates = Array.isArray(rawSpecificDates)
+      ? rawSpecificDates.filter((d): d is string => typeof d === "string")
+      : [];
 
     return {
       startDate: asString(record["startDate"]),
@@ -451,6 +460,7 @@ export function buildNormalizedFtSourceFileContent(
         saturday: typeof days["saturday"] === "boolean" ? days["saturday"] : true,
         sunday: typeof days["sunday"] === "boolean" ? days["sunday"] : true,
       },
+      ...(specificDates.length > 0 ? { specificDates } : {}),
     };
   }
 
