@@ -258,13 +258,16 @@ export default function FTEditorPage() {
       saturday: boolean;
       sunday: boolean;
     };
+    specificDates: string[];
   }>({
     trainNumber: "",
     variantIndex: -1,
     startDate: "",
     endDate: "",
     days: buildDefaultVariantValidity().days,
+    specificDates: [],
   });
+  const [newSpecificDate, setNewSpecificDate] = useState("");
   const [openVariantValidityEditor, setOpenVariantValidityEditor] = useState<{
     trainNumber: string;
     variantIndex: number;
@@ -1713,8 +1716,14 @@ export default function FTEditorPage() {
     const nextStartDate = validity?.startDate ?? "";
     const nextEndDate = validity?.endDate ?? "";
     const nextDays = validity?.days ?? buildDefaultVariantValidity().days;
+    const nextSpecificDates = validity?.specificDates ?? [];
 
     setVariantValidityDraft((previous) => {
+      const prevDates = previous.specificDates ?? [];
+      const datesChanged =
+        prevDates.length !== nextSpecificDates.length ||
+        prevDates.some((d, i) => d !== nextSpecificDates[i]);
+
       if (
         previous.trainNumber === nextTrainNumber &&
         previous.variantIndex === nextVariantIndex &&
@@ -1726,7 +1735,8 @@ export default function FTEditorPage() {
         previous.days.thursday === nextDays.thursday &&
         previous.days.friday === nextDays.friday &&
         previous.days.saturday === nextDays.saturday &&
-        previous.days.sunday === nextDays.sunday
+        previous.days.sunday === nextDays.sunday &&
+        !datesChanged
       ) {
         return previous;
       }
@@ -1745,6 +1755,7 @@ export default function FTEditorPage() {
           saturday: nextDays.saturday,
           sunday: nextDays.sunday,
         },
+        specificDates: [...nextSpecificDates],
       };
     });
 
@@ -2748,9 +2759,10 @@ export default function FTEditorPage() {
 
     const trimmedStartDate = variantValidityDraft.startDate.trim();
     const trimmedEndDate = variantValidityDraft.endDate.trim();
+    const hasSpecificDates = (variantValidityDraft.specificDates ?? []).length > 0;
     const selectedDayCount = getVariantActiveDayCount(variantValidityDraft.days);
 
-    if (selectedDayCount === 0) {
+    if (!hasSpecificDates && selectedDayCount === 0) {
       setVariantValidityError("Au moins un jour doit être sélectionné.");
       return;
     }
@@ -2766,51 +2778,53 @@ export default function FTEditorPage() {
       return;
     }
 
-    const currentTrainVariants =
-      Array.isArray(selectedTrainData?.variants) && selectedTrainData.variants.length > 0
-        ? selectedTrainData.variants
-        : selectedVariant != null
-          ? [selectedVariant]
-          : [];
+    if (!hasSpecificDates) {
+      const currentTrainVariants =
+        Array.isArray(selectedTrainData?.variants) && selectedTrainData.variants.length > 0
+          ? selectedTrainData.variants
+          : selectedVariant != null
+            ? [selectedVariant]
+            : [];
 
-    const conflictingVariantIndex =
-      currentTrainVariants.length > 0
-        ? getConflictingVariantIndex(currentTrainVariants, selectedVariantIndex, {
-            startDate: trimmedStartDate,
-            endDate: trimmedEndDate,
-            days: {
-              monday: variantValidityDraft.days.monday,
-              tuesday: variantValidityDraft.days.tuesday,
-              wednesday: variantValidityDraft.days.wednesday,
-              thursday: variantValidityDraft.days.thursday,
-              friday: variantValidityDraft.days.friday,
-              saturday: variantValidityDraft.days.saturday,
-              sunday: variantValidityDraft.days.sunday,
-            },
-          })
-        : null;
+      const conflictingVariantIndex =
+        currentTrainVariants.length > 0
+          ? getConflictingVariantIndex(currentTrainVariants, selectedVariantIndex, {
+              startDate: trimmedStartDate,
+              endDate: trimmedEndDate,
+              days: {
+                monday: variantValidityDraft.days.monday,
+                tuesday: variantValidityDraft.days.tuesday,
+                wednesday: variantValidityDraft.days.wednesday,
+                thursday: variantValidityDraft.days.thursday,
+                friday: variantValidityDraft.days.friday,
+                saturday: variantValidityDraft.days.saturday,
+                sunday: variantValidityDraft.days.sunday,
+              },
+            })
+          : null;
 
-    if (conflictingVariantIndex != null) {
-      const conflictingVariant = currentTrainVariants[conflictingVariantIndex];
-      const conflictingDays = getOverlappingVariantDayLabels(
-        {
-          monday: variantValidityDraft.days.monday,
-          tuesday: variantValidityDraft.days.tuesday,
-          wednesday: variantValidityDraft.days.wednesday,
-          thursday: variantValidityDraft.days.thursday,
-          friday: variantValidityDraft.days.friday,
-          saturday: variantValidityDraft.days.saturday,
-          sunday: variantValidityDraft.days.sunday,
-        },
-        conflictingVariant.meta.validity.days
-      );
+      if (conflictingVariantIndex != null) {
+        const conflictingVariant = currentTrainVariants[conflictingVariantIndex];
+        const conflictingDays = getOverlappingVariantDayLabels(
+          {
+            monday: variantValidityDraft.days.monday,
+            tuesday: variantValidityDraft.days.tuesday,
+            wednesday: variantValidityDraft.days.wednesday,
+            thursday: variantValidityDraft.days.thursday,
+            friday: variantValidityDraft.days.friday,
+            saturday: variantValidityDraft.days.saturday,
+            sunday: variantValidityDraft.days.sunday,
+          },
+          conflictingVariant.meta.validity.days
+        );
 
-      setVariantValidityError(
-        `Conflit interdit avec VARIANTE ${String.fromCharCode(
-          65 + conflictingVariantIndex
-        )} : chevauchement de périodes et chevauchement de jours ${conflictingDays.join(", ")}.`
-      );
-      return;
+        setVariantValidityError(
+          `Conflit interdit avec VARIANTE ${String.fromCharCode(
+            65 + conflictingVariantIndex
+          )} : chevauchement de périodes et chevauchement de jours ${conflictingDays.join(", ")}.`
+        );
+        return;
+      }
     }
 
     setVariantValidityError(null);
@@ -2853,6 +2867,7 @@ export default function FTEditorPage() {
                     saturday: variantValidityDraft.days.saturday,
                     sunday: variantValidityDraft.days.sunday,
                   },
+                  specificDates: [...(variantValidityDraft.specificDates ?? [])],
                 },
               },
             }
@@ -5151,6 +5166,10 @@ export default function FTEditorPage() {
                       { key: "sunday", label: "D" },
                     ] as const;
 
+                    const isEditorOpen =
+                      openVariantValidityEditor.trainNumber === selectedTrainNumber &&
+                      openVariantValidityEditor.variantIndex === index;
+
                     return (
                       <div
                         key={`variant-${index}`}
@@ -5292,7 +5311,9 @@ export default function FTEditorPage() {
                               }}
                             >
                               {dayLabels.map((day) => {
-                                const isActive = days?.[day.key] ?? true;
+                                const isActive = isEditorOpen
+                                  ? variantValidityDraft.days[day.key]
+                                  : (days?.[day.key] ?? true);
 
                                 return (
                                   <button
@@ -5309,10 +5330,21 @@ export default function FTEditorPage() {
                                         return;
                                       }
 
-                                      setOpenVariantValidityEditor({
-                                        trainNumber: selectedTrainNumber,
-                                        variantIndex: index,
-                                      });
+                                      if (isEditorOpen) {
+                                        setVariantValidityError(null);
+                                        setVariantValidityDraft((previous) => ({
+                                          ...previous,
+                                          days: {
+                                            ...previous.days,
+                                            [day.key]: !previous.days[day.key],
+                                          },
+                                        }));
+                                      } else {
+                                        setOpenVariantValidityEditor({
+                                          trainNumber: selectedTrainNumber,
+                                          variantIndex: index,
+                                        });
+                                      }
                                     }}
                                     style={{
                                       minWidth: 22,
@@ -5561,6 +5593,134 @@ export default function FTEditorPage() {
                                       </button>
                                     );
                                   })}
+                                </div>
+
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 6,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 13,
+                                      fontWeight: 700,
+                                      color: "#374151",
+                                    }}
+                                  >
+                                    Dates spécifiques
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: 6,
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    {(variantValidityDraft.specificDates ?? []).map((d) => (
+                                      <div
+                                        key={d}
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: 4,
+                                          padding: "4px 8px",
+                                          borderRadius: 999,
+                                          border: "1px solid #2563eb",
+                                          background: "#dbeafe",
+                                          color: "#1d4ed8",
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        {formatVariantDateForDisplay(d)}
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setVariantValidityDraft((previous) => ({
+                                              ...previous,
+                                              specificDates: (
+                                                previous.specificDates ?? []
+                                              ).filter((x) => x !== d),
+                                            }))
+                                          }
+                                          style={{
+                                            width: 16,
+                                            height: 16,
+                                            borderRadius: 999,
+                                            border: "1px solid #93c5fd",
+                                            background: "transparent",
+                                            color: "#1d4ed8",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            lineHeight: 1,
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            cursor: "pointer",
+                                            padding: 0,
+                                          }}
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: 8,
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    <input
+                                      type="date"
+                                      value={newSpecificDate}
+                                      onChange={(event) =>
+                                        setNewSpecificDate(event.target.value)
+                                      }
+                                      style={{
+                                        padding: "8px 10px",
+                                        borderRadius: 10,
+                                        border: "1px solid #d1d5db",
+                                        background: "#ffffff",
+                                        color: "#111827",
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!newSpecificDate) return;
+                                        setVariantValidityDraft((previous) => {
+                                          const existing = previous.specificDates ?? [];
+                                          if (existing.includes(newSpecificDate))
+                                            return previous;
+                                          return {
+                                            ...previous,
+                                            specificDates: [
+                                              ...existing,
+                                              newSpecificDate,
+                                            ].sort(),
+                                          };
+                                        });
+                                        setNewSpecificDate("");
+                                      }}
+                                      style={{
+                                        padding: "8px 12px",
+                                        borderRadius: 10,
+                                        border: "1px solid #d1d5db",
+                                        background: "#f3f4f6",
+                                        color: "#374151",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      Ajouter
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {variantValidityError ? (

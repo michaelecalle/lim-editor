@@ -58,6 +58,7 @@ export type FtTrainVariantValidity = {
   startDate: string;
   endDate: string;
   days: FtTrainVariantDays;
+  specificDates?: string[];
 };
 
 export type FtTrainRowData = {

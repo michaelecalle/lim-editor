@@ -260,6 +260,13 @@ export function findVariantForDate(
   trainData: FtSourceTrainData,
   dateStr: string
 ): FtSourceTrainVariantData | null {
+  for (const variant of trainData.variants) {
+    const dates = variant.meta.validity.specificDates;
+    if (Array.isArray(dates) && dates.length > 0) {
+      if (dates.includes(dateStr)) return variant;
+    }
+  }
+
   const date = new Date(dateStr + "T00:00:00");
   const dayKeys = [
     "sunday",
@@ -335,6 +342,7 @@ export function buildDefaultVariantValidity() {
       saturday: true,
       sunday: true,
     },
+    specificDates: [] as string[],
   };
 }
 
