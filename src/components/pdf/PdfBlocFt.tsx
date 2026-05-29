@@ -51,19 +51,19 @@ const s = StyleSheet.create({
   },
   cell: {
     padding: "2pt 3pt",
-    fontSize: 8,
+    fontSize: 9,
     fontFamily: "Helvetica",
     borderRight: BORDER_LIGHT,
     justifyContent: "center",
   },
   cellLast: {
     padding: "2pt 3pt",
-    fontSize: 8,
+    fontSize: 9,
     fontFamily: "Helvetica",
     justifyContent: "center",
   },
   headerText: {
-    fontSize: 8,
+    fontSize: 9,
     fontFamily: "Helvetica-Bold",
     color: "#374151",
     textAlign: "center",
@@ -98,12 +98,12 @@ function HeaderCell({
 // Largeur texte dispo dans la cellule Dependencia (flex:1) :
 // 595 - 40 (marges page) - 1.6 (bordures container) - 358 (colonnes fixes) - 6 (padding 2×3pt) ≈ 189pt
 const DEP_INNER_W = 189;
-const BOLD8_CHAR_W = 5.1; // largeur moy. d'un caractère Helvetica-Bold à 8pt (= 4.5 × 8/7)
-const DOT8_W = 2.3;       // largeur d'un point Helvetica à 8pt (= 2.0 × 8/7)
+const BOLD9_CHAR_W = 5.74; // largeur moy. d'un caractère Helvetica-Bold à 9pt (= 5.1 × 9/8)
+const DOT9_W = 2.59;       // largeur d'un point Helvetica à 9pt (= 2.3 × 9/8)
 
 function dotLeader(name: string): string {
-  const free = DEP_INNER_W - name.length * BOLD8_CHAR_W;
-  return ".".repeat(Math.max(3, Math.floor(free / DOT8_W)));
+  const free = DEP_INNER_W - name.length * BOLD9_CHAR_W;
+  return ".".repeat(Math.max(3, Math.floor(free / DOT9_W)));
 }
 
 const BAR_STYLE = { height: 1.5, backgroundColor: "#111827", marginLeft: -3, marginRight: -3 } as const;
@@ -207,7 +207,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
               <View style={[s.cell, { width: W.com }]} />
               <View style={[s.cell, { width: W.hora, justifyContent: "flex-end" }]}>
                 {noteArrivalHora !== "" && (
-                  <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", textAlign: "center" }}>
+                  <Text style={{ fontSize: 9, fontFamily: "Helvetica-Oblique", textAlign: "center" }}>
                     {noteArrivalHora}
                   </Text>
                 )}
@@ -226,14 +226,14 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
             <View key={row.id} style={s.dataRow}>
               <View style={[s.cell, { width: W.bloqueo }]}>
                 {row.showBloqueoText && (
-                  <Text style={{ fontSize: 8, fontFamily: "DejaVu", textAlign: "center" }}>
+                  <Text style={{ fontSize: 9, fontFamily: "DejaVu", textAlign: "center" }}>
                     {row.bloqueo}
                   </Text>
                 )}
               </View>
               <View style={[s.cell, { width: W.vmax, backgroundColor: row.csvHighlight !== "none" ? CSV_BG : row.highlight ? HIGHLIGHT_BG : undefined }]}>
                 {row.showVmaxText && (
-                  <Text style={{ fontSize: 8, fontFamily: "Helvetica", textAlign: "center" }}>
+                  <Text style={{ fontSize: 9, fontFamily: "Helvetica", textAlign: "center" }}>
                     {row.vmaxDisplayValue}
                   </Text>
                 )}
@@ -246,14 +246,14 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
               <View style={[s.cell, { width: W.conc }]} />
               <View style={[s.cell, { width: W.radio }]}>
                 {row.showRadioText && (
-                  <Text style={{ fontSize: 8, fontFamily: "DejaVu", textAlign: "center" }}>
+                  <Text style={{ fontSize: 9, fontFamily: "DejaVu", textAlign: "center" }}>
                     {row.radio}
                   </Text>
                 )}
               </View>
               <View style={[s.cell, { width: W.rampCaract }]}>
                 {row.showRcText && (
-                  <Text style={{ fontSize: 8, fontFamily: "Helvetica", textAlign: "center" }}>
+                  <Text style={{ fontSize: 9, fontFamily: "Helvetica", textAlign: "center" }}>
                     {row.rampCaract}
                   </Text>
                 )}
@@ -293,7 +293,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
                 <View style={BAR_STYLE} />
               )}
               {row.showBloqueoText && (
-                <Text style={{ fontSize: 8, fontFamily: "DejaVu", textAlign: "center" }}>
+                <Text style={{ fontSize: 9, fontFamily: "DejaVu", textAlign: "center" }}>
                   {row.bloqueo}
                 </Text>
               )}
@@ -311,7 +311,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
               {row.showVmaxText && (
                 <Text
                   style={{
-                    fontSize: 8,
+                    fontSize: 9,
                     fontFamily: row.csv ? "Helvetica-Bold" : "Helvetica",
                     textAlign: "center",
                   }}
@@ -327,9 +327,9 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
             >
               <Text
                 style={{
-                  fontSize: 8,
+                  fontSize: 9,
                   fontFamily: hl ? "Helvetica-Bold" : "Helvetica",
-                  color: hasStation ? "#111827" : "#6b7280",
+                  color: "#111827",
                   textAlign: "center",
                 }}
               >
@@ -342,7 +342,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
               <TextNL
                 numberOfLines={1}
                 style={{
-                  fontSize: 8,
+                  fontSize: 9,
                   fontFamily: hl ? "Helvetica-Bold" : "Helvetica",
                   color: hasStation ? "#111827" : "#6b7280",
                 }}
@@ -358,7 +358,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
             <View style={[s.cell, { width: W.com, backgroundColor: hlBg }]}>
               <Text
                 style={{
-                  fontSize: 8,
+                  fontSize: 9,
                   fontFamily: "Helvetica-Bold",
                   textAlign: "center",
                 }}
@@ -374,7 +374,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
               {row.hora !== "" && (
                 <Text
                   style={{
-                    fontSize: 8,
+                    fontSize: 9,
                     fontFamily: "Helvetica-Bold",
                     textAlign: "center",
                   }}
@@ -386,7 +386,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
 
             {/* Técn */}
             <View style={[s.cell, { width: W.tecn }]}>
-              <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold" }}>
+              <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold" }}>
                 {row.tecn}
               </Text>
             </View>
@@ -395,7 +395,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
             <View style={[s.cell, { width: W.conc }]}>
               <Text
                 style={{
-                  fontSize: 8,
+                  fontSize: 9,
                   fontFamily: "Helvetica",
                   textAlign: "center",
                 }}
@@ -410,7 +410,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
                 <View style={BAR_STYLE} />
               )}
               {row.showRadioText && (
-                <Text style={{ fontSize: 8, fontFamily: "DejaVu", textAlign: "center" }}>
+                <Text style={{ fontSize: 9, fontFamily: "DejaVu", textAlign: "center" }}>
                   {row.radio}
                 </Text>
               )}
@@ -422,7 +422,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
                 <View style={BAR_STYLE} />
               )}
               {row.showRcText && (
-                <Text style={{ fontSize: 8, fontFamily: "Helvetica", textAlign: "center" }}>
+                <Text style={{ fontSize: 9, fontFamily: "Helvetica", textAlign: "center" }}>
                   {row.rampCaract}
                 </Text>
               )}
@@ -430,7 +430,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
 
             {/* ETCS */}
             <View style={[s.cellLast, { width: W.etcs }]}>
-              <Text style={{ fontSize: 8, fontFamily: "DejaVu", textAlign: "center" }}>
+              <Text style={{ fontSize: 9, fontFamily: "DejaVu", textAlign: "center" }}>
                 {row.etcs}
               </Text>
             </View>
@@ -440,14 +440,14 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
                 <View key={`inter-${row.id}`} style={s.intermediateRow}>
                   <View style={[s.cell, { width: W.bloqueo }]}>
                     {row.bloqueoTextBelow !== "" && (
-                      <Text style={{ fontSize: 8, fontFamily: "DejaVu", textAlign: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "DejaVu", textAlign: "center" }}>
                         {row.bloqueoTextBelow}
                       </Text>
                     )}
                   </View>
                   <View style={[s.cell, { width: W.vmax, backgroundColor: row.csvHighlight !== "none" && row.csv ? CSV_BG : undefined }]}>
                     {row.vmaxTextBelow !== "" && (
-                      <Text style={{ fontSize: 8, fontFamily: "Helvetica", textAlign: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Helvetica", textAlign: "center" }}>
                         {row.vmaxTextBelow}
                       </Text>
                     )}
@@ -462,7 +462,7 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
                   <View style={[s.cell, { width: W.com }]} />
                   <View style={[s.cell, { width: W.hora, justifyContent: "flex-end" }]}>
                     {arrivalHora !== "" && !hasNoteJustBeforeNextData && (
-                      <Text style={{ fontSize: 8, fontFamily: "Helvetica-Oblique", textAlign: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Helvetica-Oblique", textAlign: "center" }}>
                         {arrivalHora}
                       </Text>
                     )}
@@ -471,14 +471,14 @@ export default function PdfBlocFt({ rows, composition, longueur, masse, showTabl
                   <View style={[s.cell, { width: W.conc }]} />
                   <View style={[s.cell, { width: W.radio }]}>
                     {row.radioTextBelow !== "" && (
-                      <Text style={{ fontSize: 8, fontFamily: "DejaVu", textAlign: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "DejaVu", textAlign: "center" }}>
                         {row.radioTextBelow}
                       </Text>
                     )}
                   </View>
                   <View style={[s.cell, { width: W.rampCaract }]}>
                     {row.rampCaractTextBelow !== "" && (
-                      <Text style={{ fontSize: 8, fontFamily: "Helvetica", textAlign: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Helvetica", textAlign: "center" }}>
                         {row.rampCaractTextBelow}
                       </Text>
                     )}
