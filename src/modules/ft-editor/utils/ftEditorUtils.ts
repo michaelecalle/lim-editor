@@ -939,6 +939,10 @@ export function buildPublishedSourceForPublish(
                   saturday: variant.meta.validity.days.saturday,
                   sunday: variant.meta.validity.days.sunday,
                 },
+                ...(Array.isArray(variant.meta.validity.specificDates) &&
+                variant.meta.validity.specificDates.length > 0
+                  ? { specificDates: variant.meta.validity.specificDates }
+                  : {}),
               },
             },
             byRowKey: {
