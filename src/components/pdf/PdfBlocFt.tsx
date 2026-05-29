@@ -63,7 +63,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   headerText: {
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: "Helvetica-Bold",
     color: "#374151",
     textAlign: "center",
@@ -115,18 +115,23 @@ function SepBar() {
 }
 
 function OrangeLine({ text }: { text: string }) {
+  const dashIdx = text.indexOf(" - ");
+  const boldPart = dashIdx !== -1 ? text.slice(0, dashIdx) : text;
+  const normalPart = dashIdx !== -1 ? text.slice(dashIdx) : "";
   return (
     <Text
       style={{
-        fontSize: 5,
+        fontSize: 6,
         fontFamily: "DejaVu",
-        fontWeight: "bold",
         fontStyle: "italic",
         color: "#f97316",
         marginTop: 1,
       }}
     >
-      {text}
+      <Text style={{ fontWeight: "bold" }}>{boldPart}</Text>
+      {normalPart !== "" && (
+        <Text style={{ fontWeight: "normal" }}>{normalPart}</Text>
+      )}
     </Text>
   );
 }

@@ -12,6 +12,11 @@ Font.register({
       fontWeight: "bold",
     },
     {
+      src: "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Oblique.ttf",
+      fontWeight: "normal",
+      fontStyle: "italic",
+    },
+    {
       src: "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-BoldOblique.ttf",
       fontWeight: "bold",
       fontStyle: "italic",
