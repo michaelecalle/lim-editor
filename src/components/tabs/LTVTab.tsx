@@ -32,7 +32,7 @@ type DivergentField = { field: string; adifVal: string; normVal: string };
  * surchargé la valeur ADIF.
  */
 function normalizeForComparison(value: string, field: string): string {
-  let v = value.trim().normalize("NFKC");
+  let v = value.trim().normalize("NFKC").replace(/\s+/g, " ");
   if (field === "via") {
     // L'ADIF encode les numéros de voie avec 'l' minuscule (U+006C) au lieu de 'I' majuscule (U+0049)
     v = v.replace(/l/g, "I");

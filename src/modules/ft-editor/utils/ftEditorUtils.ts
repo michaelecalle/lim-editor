@@ -1127,7 +1127,7 @@ export function normalizeLtvCode(value: string): string {
 }
 
 export function normalizeLtvFieldForComparison(value: string, field: string): string {
-  let v = (value ?? "").trim().normalize("NFKC");
+  let v = (value ?? "").trim().normalize("NFKC").replace(/\s+/g, " ");
   if (field === "via") {
     v = v.replace(/l/g, "I");
   }
