@@ -96,6 +96,7 @@ export type LimPdfProps = {
   longueur: number | undefined;
   masse: number | undefined;
   ltvRows: PdfLtvRow[];
+  ltvPublishedAt?: string | null;
   ftRows: PdfFtRow[];
 };
 
@@ -337,6 +338,7 @@ export default function LimPdf({
   longueur,
   masse,
   ltvRows,
+  ltvPublishedAt,
   ftRows,
 }: LimPdfProps) {
   const ltvBlocH = BLOC_LTV_BASE_H + Math.max(ltvRows.length, 1) * BLOC_LTV_ROW_H;
@@ -371,7 +373,7 @@ export default function LimPdf({
           longueur={longueur}
           masse={masse}
         />
-        <PdfBlocLtv rows={ltvRows} />
+        <PdfBlocLtv rows={ltvRows} publishedAt={ltvPublishedAt} />
         <PdfBlocFt
           rows={segments[0] ?? []}
           composition={composition}

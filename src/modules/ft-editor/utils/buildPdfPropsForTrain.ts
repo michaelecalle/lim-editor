@@ -392,7 +392,8 @@ export function buildPdfPropsForTrain(
   trainNumber: string,
   date: string,
   parsedSource: FtSourceDirectionTables,
-  ltvNormalizedRows: LtvRowForExport[]
+  ltvNormalizedRows: LtvRowForExport[],
+  ltvPublishedAt?: string | null
 ): LimPdfProps | null {
   const trainData = parsedSource.trains?.[trainNumber];
   if (!trainData) return null;
@@ -434,6 +435,7 @@ export function buildPdfPropsForTrain(
     longueur,
     masse,
     ltvRows: filteredLtvRows,
+    ltvPublishedAt: ltvPublishedAt ?? null,
     ftRows: ftRowsFinal,
   };
 }

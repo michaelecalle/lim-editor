@@ -29,6 +29,7 @@ type Props = {
   exportLongueur: number | undefined;
   exportMasse: number | undefined;
   exportLtvRowsFiltered: PdfLtvRow[];
+  exportLtvPublishedAt?: string | null;
   exportFtRowsFinal: PdfFtRow[];
 };
 
@@ -51,6 +52,7 @@ export default function ExportTab({
   exportLongueur,
   exportMasse,
   exportLtvRowsFiltered,
+  exportLtvPublishedAt,
   exportFtRowsFinal,
 }: Props) {
   return (
@@ -245,6 +247,7 @@ export default function ExportTab({
             longueur={exportLongueur}
             masse={exportMasse}
             ltvRows={exportLtvRowsFiltered}
+            ltvPublishedAt={exportLtvPublishedAt}
             ftRows={exportFtRowsFinal}
           />
         </PDFViewer>

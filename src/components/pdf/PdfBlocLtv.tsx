@@ -3,7 +3,19 @@ import type { PdfLtvRow } from "./LimPdf";
 
 type Props = {
   rows: PdfLtvRow[];
+  publishedAt?: string | null;
 };
+
+// Format dédié : "3 juin 2026 à 15h00"
+function formatLtvDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const mois = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${mois[d.getMonth()]} ${d.getFullYear()} à ${hh}h${mm}`;
+}
 
 const COL = {
   section: 118,
@@ -247,7 +259,9 @@ function autoWidth(values: string[], min: number): number {
   return Math.max(Math.ceil(maxLen * CHAR_W + CELL_PAD), min);
 }
 
-export default function PdfBlocLtv({ rows }: Props) {
+export default function PdfBlocLtv({ rows, publishedAt }: Props) {
+  const ltvDate = formatLtvDate(publishedAt);
+  const titleText = `${rows.length} LTV${ltvDate ? ` - Actualisées le ${ltvDate}` : ""}`;
   const viaW    = autoWidth(rows.map((r) => r.via),          12);
   const kmIniW  = autoWidth(rows.map((r) => r.kmIni),        14);
   const kmFinW  = autoWidth(rows.map((r) => r.kmFin),        14);
@@ -258,7 +272,7 @@ export default function PdfBlocLtv({ rows }: Props) {
   return (
     <View style={s.container}>
       <View style={s.titleBar}>
-        <Text style={s.titleText}>LTV</Text>
+        <Text style={s.titleText}>{titleText}</Text>
       </View>
 
       {/* En-tête à deux niveaux */}

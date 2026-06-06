@@ -4722,6 +4722,7 @@ export default function FTEditorPage() {
                 exportLongueur={exportLongueur}
                 exportMasse={exportMasse}
                 exportLtvRowsFiltered={exportLtvRowsFiltered}
+                exportLtvPublishedAt={ltvNormalizedFileInfo?.publishedAt ?? null}
                 exportFtRowsFinal={exportFtRowsFinal}
               />
             ) : (
@@ -5872,6 +5873,7 @@ export default function FTEditorPage() {
                 availableTrainNumbers={availableTrainNumbers}
                 parsedSource={parsedSource}
                 ltvNormalizedRows={ltvNormalizedRows}
+                ltvPublishedAt={ltvNormalizedFileInfo?.publishedAt ?? null}
                 todayIso={todayIso}
                 tomorrowIso={tomorrowIso}
                 activeTrainNumber={exportTrainNumber}

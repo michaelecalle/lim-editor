@@ -12,6 +12,7 @@ type Props = {
   availableTrainNumbers: string[];
   parsedSource: FtSourceDirectionTables;
   ltvNormalizedRows: LtvRowForExport[];
+  ltvPublishedAt?: string | null;
   todayIso: string;
   tomorrowIso: string;
   activeTrainNumber: string;
@@ -46,6 +47,7 @@ export default function PdfExportPanel({
   availableTrainNumbers,
   parsedSource,
   ltvNormalizedRows,
+  ltvPublishedAt,
   todayIso,
   tomorrowIso,
   activeTrainNumber,
@@ -117,7 +119,7 @@ export default function PdfExportPanel({
   };
 
   const downloadSinglePdf = async (trainNumber: string, date: string) => {
-    const props = buildPdfPropsForTrain(trainNumber, date, parsedSource, ltvNormalizedRows);
+    const props = buildPdfPropsForTrain(trainNumber, date, parsedSource, ltvNormalizedRows, ltvPublishedAt);
     if (!props) return;
     const blob = await pdf(<LimPdf {...props} />).toBlob();
     triggerDownload(blob, `LIM_${trainNumber}_${date}.pdf`);
@@ -126,7 +128,7 @@ export default function PdfExportPanel({
   const downloadZip = async (trainNumbers: string[], date: string) => {
     const zip = new JSZip();
     for (const trainNumber of trainNumbers) {
-      const props = buildPdfPropsForTrain(trainNumber, date, parsedSource, ltvNormalizedRows);
+      const props = buildPdfPropsForTrain(trainNumber, date, parsedSource, ltvNormalizedRows, ltvPublishedAt);
       if (!props) continue;
       const blob = await pdf(<LimPdf {...props} />).toBlob();
       zip.file(`LIM_${trainNumber}_${date}.pdf`, blob);
