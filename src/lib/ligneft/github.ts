@@ -1,7 +1,7 @@
 import { DEFAULT_GITHUB_BRANCH } from "./constants.js";
 import { LigneFtConfigurationError, LigneFtGithubError } from "./errors.js";
 
-export type GithubTarget = "editor" | "lim2";
+export type GithubTarget = "editor" | "lim2" | "logs";
 
 type GithubConfig = {
   token: string;
@@ -98,6 +98,30 @@ async function parseGithubError(response: Response): Promise<never> {
 }
 
 export function getGithubConfig(target: GithubTarget = "editor"): GithubConfig {
+  // Cible "logs" (repo lim-logs, privé) : on réutilise le token existant de
+  // l'éditeur (le même PAT a accès à lim-logs). Aucun nouvel env requis,
+  // mais surchargeable via LIM_LOGS_GITHUB_* si besoin.
+  if (target === "logs") {
+    const token =
+      process.env.LIM_LOGS_GITHUB_TOKEN?.trim() ||
+      process.env.LIGNEFT_LIM2_GITHUB_TOKEN?.trim() ||
+      process.env.LIGNEFT_EDITOR_GITHUB_TOKEN?.trim() ||
+      process.env.GITHUB_TOKEN?.trim();
+
+    if (!token) {
+      throw new LigneFtConfigurationError(
+        "Missing GitHub token for lim-logs (set LIM_LOGS_GITHUB_TOKEN or reuse the editor token)"
+      );
+    }
+
+    return {
+      token,
+      owner: process.env.LIM_LOGS_GITHUB_OWNER?.trim() || "michaelecalle",
+      repo: process.env.LIM_LOGS_GITHUB_REPO?.trim() || "lim-logs",
+      branch: process.env.LIM_LOGS_GITHUB_BRANCH?.trim() || DEFAULT_GITHUB_BRANCH,
+    };
+  }
+
   const envNames = getGithubEnvNames(target);
 
   return {

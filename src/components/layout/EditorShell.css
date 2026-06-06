@@ -25,6 +25,11 @@
   overflow: hidden;
 }
 
+/* Panneau latéral masqué : le principal occupe toute la largeur */
+.editor-shell__body--no-side {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .editor-shell__main {
   min-width: 0;
   min-height: 0;

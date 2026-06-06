@@ -87,27 +87,30 @@ export async function fetchRemoteFtSourceRaw(): Promise<RemoteFtSourceResult> {
 }
 
 export async function fetchRemoteLtvNormalizedJson(): Promise<RemoteLtvNormalizedResult> {
+  // Source = normalisé issu du PDF, uploadé par l'app cabine dans lim-logs (privé).
+  // Lu via la fonction serverless /api/ltv/current (token côté serveur).
   try {
-    const cacheBustedUrl = `${LTV_NORMALIZED_RAW_URL}?t=${Date.now()}`;
-
-    const response = await fetch(cacheBustedUrl, {
+    const response = await fetch(`/api/ltv/current?t=${Date.now()}`, {
       method: "GET",
       cache: "no-store",
     });
 
-    if (!response.ok) {
-      return {
-        ok: false,
-        errorMessage: `HTTP ${response.status} ${response.statusText}`,
-      };
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
     }
 
-    const data = await response.json();
+    if (!response.ok || !payload || typeof payload !== "object" || (payload as { ok?: boolean }).ok !== true) {
+      const errorMessage =
+        payload && typeof payload === "object" && (payload as { error?: { message?: string } }).error?.message
+          ? (payload as { error: { message: string } }).error.message
+          : `HTTP ${response.status} ${response.statusText}`;
+      return { ok: false, errorMessage };
+    }
 
-    return {
-      ok: true,
-      data,
-    };
+    return { ok: true, data: (payload as { data: unknown }).data };
   } catch (error) {
     return {
       ok: false,
