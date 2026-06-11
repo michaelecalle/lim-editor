@@ -125,13 +125,6 @@ type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT";
 
 export default function FTEditorPage() {
   const [activeTab, setActiveTab] = useState<EditorTab>("LTV");
-  // Masquage du panneau latéral droit dans l'onglet LTV (persisté).
-  const [ltvSidePanelHidden, setLtvSidePanelHidden] = useState<boolean>(() => {
-    try { return localStorage.getItem("lim-editor:ltv-side-hidden") === "1"; } catch { return false; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("lim-editor:ltv-side-hidden", ltvSidePanelHidden ? "1" : "0"); } catch { /* ignore */ }
-  }, [ltvSidePanelHidden]);
   const [direction, setDirection] = useState<EditorDirection>("NORD_SUD");
   const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>("");
   const [selectedOrigin, setSelectedOrigin] = useState<string>("");
@@ -4575,7 +4568,7 @@ export default function FTEditorPage() {
       ) : null}
 
       <EditorShell
-        hideSidePanel={activeTab === "LTV" && ltvSidePanelHidden}
+        hideSidePanel={activeTab === "LTV"}
         toolbar={
           <div
             style={{
@@ -4726,27 +4719,6 @@ export default function FTEditorPage() {
                 exportFtRowsFinal={exportFtRowsFinal}
               />
             ) : (
-              <>
-              {/* Bascule d'affichage du panneau latéral droit (onglet LTV) */}
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setLtvSidePanelHidden((v) => !v)}
-                  title={ltvSidePanelHidden ? "Afficher le panneau latéral" : "Masquer le panneau latéral"}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #d1d5db",
-                    background: "#f9fafb",
-                    color: "#374151",
-                    fontWeight: 600,
-                    fontSize: 13,
-                    cursor: "pointer",
-                  }}
-                >
-                  {ltvSidePanelHidden ? "« Afficher le panneau" : "Masquer le panneau »"}
-                </button>
-              </div>
               <LTVTab
                 ltvNormalizedStatus={ltvNormalizedStatus}
                 ltvNormalizedMessage={ltvNormalizedMessage}
@@ -4765,7 +4737,6 @@ export default function FTEditorPage() {
                 onNormalizeLtvKmField={handleNormalizeLtvKmField}
                 onToggleLtvFlagField={handleToggleLtvFlagField}
               />
-              </>
             )}
           </>
         }
