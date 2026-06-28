@@ -48,6 +48,7 @@ import FTTab from "../components/tabs/FTTab";
 import ExportTab from "../components/tabs/ExportTab";
 import HoraireTab from "../components/tabs/HoraireTab";
 import LTVTab from "../components/tabs/LTVTab";
+import DocumentsTab from "../components/tabs/DocumentsTab";
 import {
   type LtvEditorRow,
   type LtvAdifApiResponse,
@@ -121,7 +122,7 @@ import {
 } from "../modules/ft-editor/utils/ftEditorUtils";
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
-type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT";
+type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT" | "DOCUMENTS";
 
 export default function FTEditorPage() {
   const [activeTab, setActiveTab] = useState<EditorTab>("LTV");
@@ -4568,7 +4569,7 @@ export default function FTEditorPage() {
       ) : null}
 
       <EditorShell
-        hideSidePanel={activeTab === "LTV"}
+        hideSidePanel={activeTab === "LTV" || activeTab === "DOCUMENTS"}
         toolbar={
           <div
             style={{
@@ -4600,6 +4601,7 @@ export default function FTEditorPage() {
                 { id: "HORAIRE" as const, label: "Données horaires" },
                 { id: "LTV" as const, label: "LTV" },
                 { id: "EXPORT" as const, label: "Export LIM PDF" },
+                { id: "DOCUMENTS" as const, label: "Documents" },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
 
@@ -4718,6 +4720,8 @@ export default function FTEditorPage() {
                 exportLtvPublishedAt={ltvNormalizedFileInfo?.publishedAt ?? null}
                 exportFtRowsFinal={exportFtRowsFinal}
               />
+            ) : activeTab === "DOCUMENTS" ? (
+              <DocumentsTab />
             ) : (
               <LTVTab
                 ltvNormalizedStatus={ltvNormalizedStatus}

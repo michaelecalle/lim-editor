@@ -245,6 +245,125 @@ export async function githubDeleteFile(
   }
 }
 
+/**
+ * Date (ISO) du dernier commit ayant modifié `path` dans le repo de la cible.
+ * Sert à afficher la « dernière mise à jour » d'un document. null si aucun commit trouvé.
+ */
+export async function githubGetLastCommitDate(
+  path: string,
+  target: GithubTarget = "editor",
+): Promise<string | null> {
+  const { owner, repo, branch } = getGithubConfig(target);
+  const normalizedPath = path.replace(/^\/+/, "");
+
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/commits`);
+  url.searchParams.set("path", normalizedPath);
+  url.searchParams.set("sha", branch);
+  url.searchParams.set("per_page", "1");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: buildHeaders(target),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    await parseGithubError(response);
+  }
+
+  const json = (await response.json()) as Array<{
+    commit?: { committer?: { date?: string }; author?: { date?: string } };
+  }>;
+
+  if (!Array.isArray(json) || json.length === 0) return null;
+
+  const commit = json[0]?.commit;
+  return commit?.committer?.date ?? commit?.author?.date ?? null;
+}
+
+/** SHA (blob) du fichier à `path`, ou null s'il n'existe pas (404). Marche pour le binaire. */
+export async function githubGetFileSha(
+  path: string,
+  target: GithubTarget = "editor",
+): Promise<string | null> {
+  const { branch } = getGithubConfig(target);
+  const url = new URL(buildGithubApiUrl(path, target));
+  url.searchParams.set("ref", branch);
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: buildHeaders(target),
+    cache: "no-store",
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) await parseGithubError(response);
+
+  const json = (await response.json()) as { sha?: string };
+  return json.sha ?? null;
+}
+
+/** Écrit/écrase un fichier BINAIRE (contenu déjà en base64) — ex. un PDF. */
+export async function githubPutBinaryFile(
+  path: string,
+  base64Content: string,
+  message: string,
+  sha?: string,
+  target: GithubTarget = "editor",
+): Promise<{ path: string; sha: string }> {
+  const { branch } = getGithubConfig(target);
+
+  const response = await fetch(buildGithubApiUrl(path, target), {
+    method: "PUT",
+    headers: buildHeaders(target),
+    body: JSON.stringify({
+      message,
+      content: base64Content,
+      branch,
+      ...(sha ? { sha } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    await parseGithubError(response);
+  }
+
+  const json = (await response.json()) as {
+    content?: { path: string; sha: string };
+  };
+
+  if (!json.content?.path || !json.content?.sha) {
+    throw new LigneFtGithubError(`Invalid GitHub PUT response for path: ${path}`, json);
+  }
+
+  return { path: json.content.path, sha: json.content.sha };
+}
+
+/** Octets BRUTS d'un fichier (média "raw" → pas de limite inline de 1 Mo). null si 404. */
+export async function githubGetRawFile(
+  path: string,
+  target: GithubTarget = "editor",
+): Promise<ArrayBuffer | null> {
+  const { token, branch } = getGithubConfig(target);
+  const url = new URL(buildGithubApiUrl(path, target));
+  url.searchParams.set("ref", branch);
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Accept: "application/vnd.github.raw",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    cache: "no-store",
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) await parseGithubError(response);
+
+  return await response.arrayBuffer();
+}
+
 export async function githubListDirectory(
   path: string,
   target: GithubTarget = "editor",
