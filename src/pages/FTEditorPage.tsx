@@ -721,7 +721,9 @@ export default function FTEditorPage() {
         isIncreasing
           ? pkIni <= pkFin ? [ltv.kmIni, ltv.kmFin] : [ltv.kmFin, ltv.kmIni]
           : pkIni >= pkFin ? [ltv.kmIni, ltv.kmFin] : [ltv.kmFin, ltv.kmIni];
-      const note = `LTV ${speed} - PK ${firstPkStr} → ${secondPkStr}${ltv.observaciones.trim() ? ` — ${ltv.observaciones.trim()}` : ""}`;
+      // Pas d'observaciones dans la note FT (trop long) — elles restent dans le
+      // tableau LTV complet en tête du PDF.
+      const note = `LTV ${speed} - PK ${firstPkStr} → ${secondPkStr}`;
       if (!ltvNoteMap.has(targetId)) ltvNoteMap.set(targetId, []);
       ltvNoteMap.get(targetId)!.push(note);
     }
