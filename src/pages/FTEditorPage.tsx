@@ -4755,18 +4755,6 @@ export default function FTEditorPage() {
                 ltvNormalizedFileInfo={ltvNormalizedFileInfo}
                 ltvNormalizedRows={ltvNormalizedRows}
                 onImportLtvPdf={handleImportLtvPdf}
-                draggedLtvRowId={draggedLtvRowId}
-                dragOverLtvRowId={dragOverLtvRowId}
-                onAddLtvNormalizedRow={handleAddLtvNormalizedRow}
-                onRequestDeleteLtvNormalizedRow={handleRequestDeleteLtvNormalizedRow}
-                onStartLtvRowDrag={handleStartLtvRowDrag}
-                onEnterLtvRowDrag={handleEnterLtvRowDrag}
-                onDropLtvRow={handleDropLtvRow}
-                onCancelLtvRowDrag={handleCancelLtvRowDrag}
-                onUpdateLtvTextField={handleUpdateLtvTextField}
-                onNormalizeLtvCodeField={handleNormalizeLtvCodeField}
-                onNormalizeLtvKmField={handleNormalizeLtvKmField}
-                onToggleLtvFlagField={handleToggleLtvFlagField}
               />
             )}
           </>
