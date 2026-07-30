@@ -43,6 +43,7 @@ type Props = {
   ltvNormalizedMessage: string;
   ltvNormalizedFileInfo: LtvNormalizedFileInfo | null;
   ltvNormalizedRows: LtvEditorRow[];
+  onImportLtvPdf: (file: File) => void | Promise<void>;
   draggedLtvRowId: string | null;
   dragOverLtvRowId: string | null;
 
@@ -64,6 +65,7 @@ export default function LTVTab({
   ltvNormalizedMessage,
   ltvNormalizedFileInfo,
   ltvNormalizedRows,
+  onImportLtvPdf,
   draggedLtvRowId,
   dragOverLtvRowId,
   onAddLtvNormalizedRow,
@@ -436,21 +438,50 @@ export default function LTVTab({
           ) : null}
         </div>
 
-        <button
-          type="button"
-          onClick={onAddLtvNormalizedRow}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 10,
-            border: "1px solid #2563eb",
-            background: "#2563eb",
-            color: "#ffffff",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Ajouter une LTV
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label
+            title="Importer le PDF LTV (même extraction que l'application LIM). Écrase le fichier unique."
+            style={{
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "1px solid #16a34a",
+              background: "#16a34a",
+              color: "#ffffff",
+              fontWeight: 700,
+              cursor: ltvNormalizedStatus === "loading" ? "default" : "pointer",
+              opacity: ltvNormalizedStatus === "loading" ? 0.6 : 1,
+            }}
+          >
+            Importer un PDF LTV
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              style={{ display: "none" }}
+              disabled={ltvNormalizedStatus === "loading"}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void onImportLtvPdf(file);
+              }}
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={onAddLtvNormalizedRow}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "1px solid #2563eb",
+              background: "#2563eb",
+              color: "#ffffff",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Ajouter une LTV
+          </button>
+        </div>
       </div>
 
       {renderTableSection(

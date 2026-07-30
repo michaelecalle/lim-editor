@@ -35,7 +35,8 @@ import {
   fetchLigneFtArchives,
   publishLigneFtData,
 } from "../modules/ft-editor/api/ligneftApi";
-import { publishLtvNormalizedData } from "../modules/ft-editor/api/ltvApi";
+import { publishLtvNormalizedData, publishLtvCurrentFromEditor } from "../modules/ft-editor/api/ltvApi";
+import { parseLtvPdf2026 } from "../lib/ltvPdfParser";
 import { HORAIRE_COLUMNS } from "../modules/ft-editor/constants/ftColumns";
 import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRows";
 import { areSourceTablesEqual } from "../modules/ft-editor/utils/areSourceTablesEqual";
@@ -3749,6 +3750,31 @@ export default function FTEditorPage() {
     });
   }, []);
 
+  // Import d'un PDF LTV (même extraction que l'app cabine) → écrit le fichier
+  // canonique unique dans lim-logs, et alimente l'affichage + l'onglet Export.
+  const handleImportLtvPdf = useCallback(async (file: File) => {
+    setLtvNormalizedStatus("loading");
+    setLtvNormalizedMessage("Extraction du PDF LTV en cours…");
+    try {
+      const normalized = await parseLtvPdf2026(file);
+      setLtvNormalizedRows(readLtvNormalizedRowsFromFile(normalized));
+      setLtvNormalizedFileInfo(readLtvNormalizedFileInfo(normalized));
+      const result = await publishLtvCurrentFromEditor(normalized);
+      const plural = result.rowCount > 1 ? "s" : "";
+      setLtvNormalizedStatus("success");
+      setLtvNormalizedMessage(
+        `${result.rowCount} LTV importée${plural} depuis le PDF et publiée${plural} (fichier unique mis à jour).`
+      );
+    } catch (error) {
+      setLtvNormalizedStatus("error");
+      setLtvNormalizedMessage(
+        `Import du PDF LTV échoué : ${
+          error instanceof Error ? error.message : "erreur inconnue"
+        }`
+      );
+    }
+  }, []);
+
   const handleRequestDeleteLtvNormalizedRow = useCallback((rowId: string) => {
     setPendingLtvDeleteRowId(rowId);
   }, []);
@@ -4728,6 +4754,7 @@ export default function FTEditorPage() {
                 ltvNormalizedMessage={ltvNormalizedMessage}
                 ltvNormalizedFileInfo={ltvNormalizedFileInfo}
                 ltvNormalizedRows={ltvNormalizedRows}
+                onImportLtvPdf={handleImportLtvPdf}
                 draggedLtvRowId={draggedLtvRowId}
                 dragOverLtvRowId={dragOverLtvRowId}
                 onAddLtvNormalizedRow={handleAddLtvNormalizedRow}
