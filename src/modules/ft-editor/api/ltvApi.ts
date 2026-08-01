@@ -48,6 +48,9 @@ export type LtvPublishCurrentResponse = {
   publishedAt: string;
   rowCount: number;
   warnings: string[];
+  // true si le normalisé a été (ré)écrit parce que sa Fecha Vigor était strictement
+  // plus récente (ou qu'aucun normalisé n'existait). Sert à piloter le dépôt du PDF.
+  written: boolean;
 };
 
 export async function publishLtvCurrentFromEditor(
@@ -70,6 +73,24 @@ export async function publishLtvCurrentFromEditor(
   }
 
   return payload as LtvPublishCurrentResponse;
+}
+
+// Dépose le PDF source LTV à côté du normalisé (mode secours de LIM). Non bloquant :
+// on ignore les erreurs (l'import LTV reste réussi même si ce dépôt échoue). `force`
+// suit la décision de date du normalisé (voir publishLtvCurrentFromEditor().written).
+export async function publishLtvSourcePdf(
+  pdfBase64: string,
+  force: boolean
+): Promise<void> {
+  try {
+    await fetch("/api/ltv/publish-current-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ pdfBase64, force }),
+    });
+  } catch {
+    // best-effort : rien à faire, la publication du LTV a déjà réussi.
+  }
 }
 
 export async function publishLtvNormalizedData(

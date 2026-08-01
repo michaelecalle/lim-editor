@@ -35,7 +35,7 @@ import {
   fetchLigneFtArchives,
   publishLigneFtData,
 } from "../modules/ft-editor/api/ligneftApi";
-import { publishLtvNormalizedData, publishLtvCurrentFromEditor } from "../modules/ft-editor/api/ltvApi";
+import { publishLtvNormalizedData, publishLtvCurrentFromEditor, publishLtvSourcePdf } from "../modules/ft-editor/api/ltvApi";
 import { parseLtvPdf2026 } from "../lib/ltvPdfParser";
 import { HORAIRE_COLUMNS } from "../modules/ft-editor/constants/ftColumns";
 import { getDirectionRows } from "../modules/ft-editor/selectors/getDirectionRows";
@@ -124,6 +124,20 @@ import {
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
 type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT" | "DOCUMENTS";
+
+// Fichier → base64 (octets bruts, sans le préfixe data:) pour l'API GitHub Contents.
+// FileReader.readAsDataURL encode le binaire correctement (pas de corruption UTF-8).
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1] ?? "");
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function FTEditorPage() {
   const [activeTab, setActiveTab] = useState<EditorTab>("LTV");
@@ -3762,10 +3776,19 @@ export default function FTEditorPage() {
       setLtvNormalizedRows(readLtvNormalizedRowsFromFile(normalized));
       setLtvNormalizedFileInfo(readLtvNormalizedFileInfo(normalized));
       const result = await publishLtvCurrentFromEditor(normalized);
+      // Déposer aussi le PDF source LTV pour le mode secours de LIM. Il SUIT la
+      // décision de date du normalisé : on force l'écrasement seulement si le
+      // normalisé vient d'être (ré)écrit (plus récent), sinon rattrapage si absent.
+      // Fire-and-forget : l'import LTV est déjà réussi, ce dépôt est best-effort.
+      void fileToBase64(file)
+        .then((b64) => publishLtvSourcePdf(b64, result.written))
+        .catch(() => {});
       const plural = result.rowCount > 1 ? "s" : "";
       setLtvNormalizedStatus("success");
       setLtvNormalizedMessage(
-        `${result.rowCount} LTV importée${plural} depuis le PDF et publiée${plural} (fichier unique mis à jour).`
+        result.written
+          ? `${result.rowCount} LTV importée${plural} depuis le PDF et publiée${plural} (fichier unique mis à jour).`
+          : `PDF déjà à jour : le LTV stocké est plus récent ou identique, rien n'a été remplacé.`
       );
     } catch (error) {
       setLtvNormalizedStatus("error");

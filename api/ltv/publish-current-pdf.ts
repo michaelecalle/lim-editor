@@ -1,25 +1,19 @@
-import { publishLtvCurrentToLogs } from "../../src/lib/ligneft/ltvArchive.js";
+import { publishLtvSourcePdfToLogs } from "../../src/lib/ligneft/ltvArchive.js";
 import {
   LigneFtConfigurationError,
   LigneFtGithubError,
   LigneFtValidationError,
 } from "../../src/lib/ligneft/errors.js";
-import type {
-  LtvErrorResponse,
-  LtvPublishRequestBody,
-} from "../../src/types/ltv-api";
+import type { LtvErrorResponse } from "../../src/types/ltv-api";
 
-type PublishCurrentResponse = {
+type PublishCurrentPdfResponse = {
   ok: true;
   path: string;
-  publishedAt: string;
-  rowCount: number;
-  warnings: string[];
-  written: boolean;
+  skipped: boolean;
 };
 
 function jsonResponse(
-  body: PublishCurrentResponse | LtvErrorResponse,
+  body: PublishCurrentPdfResponse | LtvErrorResponse,
   status = 200
 ): Response {
   return new Response(JSON.stringify(body), {
@@ -31,14 +25,15 @@ function jsonResponse(
   });
 }
 
-// Écrit le fichier LTV canonique unique (lim-logs/ltv-normalized/current.json),
-// celui que l'app cabine écrit aussi et que les deux (LIM + éditeur) lisent.
+// Dépose le PDF SOURCE LTV (base64) dans lim-logs/ltv-normalized/current.pdf, à côté
+// du normalisé. Il SUIT la décision de date du normalisé : `force` = le normalisé
+// vient d'être (ré)écrit car plus récent. L'app cabine (LIM) l'affiche en mode secours.
 export async function POST(request: Request): Promise<Response> {
   try {
-    let body: LtvPublishRequestBody;
+    let body: { pdfBase64?: unknown; force?: unknown };
 
     try {
-      body = (await request.json()) as LtvPublishRequestBody;
+      body = (await request.json()) as { pdfBase64?: unknown; force?: unknown };
     } catch {
       return jsonResponse(
         { ok: false, error: { code: "INVALID_REQUEST", message: "Invalid JSON body" } },
@@ -46,23 +41,18 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    if (!body || typeof body !== "object" || !("data" in body)) {
+    if (!body || typeof body !== "object" || typeof body.pdfBase64 !== "string") {
       return jsonResponse(
-        { ok: false, error: { code: "INVALID_REQUEST", message: 'Missing required body field: "data"' } },
+        { ok: false, error: { code: "INVALID_REQUEST", message: 'Missing required body field: "pdfBase64"' } },
         400
       );
     }
 
-    const result = await publishLtvCurrentToLogs(body.data);
-
-    return jsonResponse({
-      ok: true,
-      path: result.path,
-      publishedAt: result.publishedAt,
-      rowCount: result.rowCount,
-      warnings: result.warnings,
-      written: result.written,
+    const result = await publishLtvSourcePdfToLogs(body.pdfBase64, {
+      force: body.force === true,
     });
+
+    return jsonResponse({ ok: true, path: result.path, skipped: result.skipped });
   } catch (error) {
     if (error instanceof LigneFtValidationError) {
       return jsonResponse(
