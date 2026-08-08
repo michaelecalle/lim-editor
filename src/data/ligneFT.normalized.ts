@@ -1893,10 +1893,6 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
               "hora": "15:23",
               "conc": "6"
             },
-            "sn-data-0019": {
-              "hora": "15:32",
-              "conc": "9"
-            },
             "sn-data-0020": {
               "hora": "15:32",
               "conc": "0"
@@ -1962,6 +1958,21 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "sn-data-0053": {
               "hora": "16:37",
               "conc": "5"
+            },
+            "sn-data-0056": {
+              "hora": "15:37"
+            },
+            "sn-data-0057": {
+              "hora": "15:42"
+            },
+            "sn-data-0058": {
+              "hora": "15:49"
+            },
+            "sn-data-0059": {
+              "hora": "16:07"
+            },
+            "sn-data-0060": {
+              "hora": "16:11"
             }
           }
         }
@@ -2088,10 +2099,6 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
               "hora": "16:30",
               "conc": "6"
             },
-            "sn-data-0019": {
-              "hora": "16:39",
-              "conc": "9"
-            },
             "sn-data-0020": {
               "hora": "16:39",
               "conc": "0"
@@ -2153,6 +2160,24 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "sn-data-0055": {
               "hora": "17:50",
               "conc": "11"
+            },
+            "sn-data-0056": {
+              "hora": "16:44"
+            },
+            "sn-data-0057": {
+              "hora": "16:49"
+            },
+            "sn-data-0058": {
+              "hora": "16:56"
+            },
+            "sn-data-0059": {
+              "hora": "17:14"
+            },
+            "sn-data-0060": {
+              "hora": "17:18"
+            },
+            "sn-data-0053": {
+              "hora": "17:44"
             }
           }
         },
@@ -2195,10 +2220,6 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
               "hora": "16:30",
               "conc": "6"
             },
-            "sn-data-0019": {
-              "hora": "16:39",
-              "conc": "9"
-            },
             "sn-data-0020": {
               "hora": "16:39",
               "conc": "0"
@@ -2260,6 +2281,24 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "sn-data-0055": {
               "hora": "17:50",
               "conc": "11"
+            },
+            "sn-data-0056": {
+              "hora": "16:44"
+            },
+            "sn-data-0057": {
+              "hora": "16:49"
+            },
+            "sn-data-0058": {
+              "hora": "16:56"
+            },
+            "sn-data-0059": {
+              "hora": "17:14"
+            },
+            "sn-data-0060": {
+              "hora": "17:18"
+            },
+            "sn-data-0053": {
+              "hora": "17:44"
             }
           }
         }
@@ -2386,10 +2425,6 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
               "hora": "9:32",
               "conc": "6"
             },
-            "sn-data-0019": {
-              "hora": "9:41",
-              "conc": "9"
-            },
             "sn-data-0020": {
               "hora": "9:41",
               "conc": "0"
@@ -2451,6 +2486,24 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "sn-data-0055": {
               "hora": "10:52",
               "conc": "11"
+            },
+            "sn-data-0056": {
+              "hora": "9:46"
+            },
+            "sn-data-0057": {
+              "hora": "9:51"
+            },
+            "sn-data-0058": {
+              "hora": "9:58"
+            },
+            "sn-data-0059": {
+              "hora": "10:16"
+            },
+            "sn-data-0060": {
+              "hora": "10:20"
+            },
+            "sn-data-0053": {
+              "hora": "10:46"
             }
           }
         }
@@ -2642,6 +2695,24 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "ns-data-0050": {
               "hora": "12:18",
               "conc": "2"
+            },
+            "ns-data-0049": {
+              "hora": "12:19"
+            },
+            "ns-data-0060": {
+              "hora": "12:35"
+            },
+            "ns-data-0059": {
+              "hora": "12:39"
+            },
+            "ns-data-0058": {
+              "hora": "12:57"
+            },
+            "ns-data-0057": {
+              "hora": "13:04"
+            },
+            "ns-data-0056": {
+              "hora": "13:09"
             }
           }
         }
@@ -2833,6 +2904,24 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "ns-data-0006": {
               "hora": "14:32",
               "conc": "7"
+            },
+            "ns-data-0060": {
+              "hora": "13:38"
+            },
+            "ns-data-0059": {
+              "hora": "13:42"
+            },
+            "ns-data-0058": {
+              "hora": "14:00"
+            },
+            "ns-data-0057": {
+              "hora": "14:07"
+            },
+            "ns-data-0056": {
+              "hora": "14:12"
+            },
+            "ns-data-0053": {
+              "hora": "13:12"
             }
           }
         },
@@ -2940,6 +3029,24 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "ns-data-0006": {
               "hora": "14:32",
               "conc": "7"
+            },
+            "ns-data-0060": {
+              "hora": "13:38"
+            },
+            "ns-data-0059": {
+              "hora": "13:42"
+            },
+            "ns-data-0058": {
+              "hora": "14:00"
+            },
+            "ns-data-0057": {
+              "hora": "14:07"
+            },
+            "ns-data-0056": {
+              "hora": "14:12"
+            },
+            "ns-data-0053": {
+              "hora": "13:12"
             }
           }
         }
@@ -3131,6 +3238,24 @@ export const LIGNE_FT_NORMALIZED: LigneFTNormalized = {
             "ns-data-0006": {
               "hora": "21:32",
               "conc": "7"
+            },
+            "ns-data-0060": {
+              "hora": "20:38"
+            },
+            "ns-data-0059": {
+              "hora": "20:42"
+            },
+            "ns-data-0058": {
+              "hora": "21:00"
+            },
+            "ns-data-0057": {
+              "hora": "21:07"
+            },
+            "ns-data-0056": {
+              "hora": "21:12"
+            },
+            "ns-data-0053": {
+              "hora": "20:12"
             }
           }
         }
