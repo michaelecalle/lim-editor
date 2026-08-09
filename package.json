@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
+    "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "pdfjs-dist": "^5.7.284",
     "react": "^18.3.1",

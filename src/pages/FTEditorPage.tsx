@@ -50,6 +50,7 @@ import ExportTab from "../components/tabs/ExportTab";
 import HoraireTab from "../components/tabs/HoraireTab";
 import LTVTab from "../components/tabs/LTVTab";
 import DocumentsTab from "../components/tabs/DocumentsTab";
+import Normalise2026Tab from "../components/tabs/Normalise2026Tab";
 import {
   type LtvEditorRow,
   type LtvAdifApiResponse,
@@ -123,7 +124,7 @@ import {
 } from "../modules/ft-editor/utils/ftEditorUtils";
 
 type SourceStatus = "idle" | "loading" | "success" | "error";
-type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT" | "DOCUMENTS";
+type EditorTab = "FT" | "HORAIRE" | "LTV" | "EXPORT" | "DOCUMENTS" | "NORMALISE_2026";
 
 // Fichier → base64 (octets bruts, sans le préfixe data:) pour l'API GitHub Contents.
 // FileReader.readAsDataURL encode le binaire correctement (pas de corruption UTF-8).
@@ -140,7 +141,8 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function FTEditorPage() {
-  const [activeTab, setActiveTab] = useState<EditorTab>("LTV");
+  // Onglet par défaut : Normalisé 2026 (provisoire, le temps du chantier — avant : LTV).
+  const [activeTab, setActiveTab] = useState<EditorTab>("NORMALISE_2026");
   const [direction, setDirection] = useState<EditorDirection>("NORD_SUD");
   const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>("");
   const [selectedOrigin, setSelectedOrigin] = useState<string>("");
@@ -4620,7 +4622,7 @@ export default function FTEditorPage() {
       ) : null}
 
       <EditorShell
-        hideSidePanel={activeTab === "LTV" || activeTab === "DOCUMENTS"}
+        hideSidePanel={activeTab === "LTV" || activeTab === "DOCUMENTS" || activeTab === "NORMALISE_2026"}
         toolbar={
           <div
             style={{
@@ -4653,6 +4655,7 @@ export default function FTEditorPage() {
                 { id: "LTV" as const, label: "LTV" },
                 { id: "EXPORT" as const, label: "Export LIM PDF" },
                 { id: "DOCUMENTS" as const, label: "Documents" },
+                { id: "NORMALISE_2026" as const, label: "Normalisé 2026" },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
 
@@ -4773,6 +4776,8 @@ export default function FTEditorPage() {
               />
             ) : activeTab === "DOCUMENTS" ? (
               <DocumentsTab />
+            ) : activeTab === "NORMALISE_2026" ? (
+              <Normalise2026Tab />
             ) : (
               <LTVTab
                 ltvNormalizedStatus={ltvNormalizedStatus}
