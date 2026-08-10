@@ -1116,6 +1116,13 @@ export default function Normalise2026Tab() {
       setTrains(recoveredTrains);
       setLigneVersions(readLigneVersionsLocal(raw));
       setMateriels(readMaterielsLocal(raw));
+      // Grave la récupération en local pour éviter de refaire l'aller-retour
+      // réseau à chaque rechargement tant qu'aucune nouvelle modif n'est faite.
+      try {
+        localStorage.setItem(NORMALIZED_LOCAL_KEY, raw);
+      } catch {
+        // stockage indisponible → tant pis, l'affichage reste correct pour cette session.
+      }
     })();
     return () => {
       cancelled = true;

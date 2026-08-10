@@ -8,6 +8,9 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
+      // Lecture publique (données non sensibles) depuis un autre domaine — LIM2
+      // consomme cette route directement (cf. mémoire projet "LIM lit le 2026 en ligne").
+      "Access-Control-Allow-Origin": "*",
     },
   });
 }
