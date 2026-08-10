@@ -1,17 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ImportDiffModal, { type Decision } from "../ImportDiffModal";
 import { runImport, type ImportResult } from "../../lib/importer/runImport";
 import { applyLigneActions, applyTrainActions } from "../../lib/importer/applyDiffs";
 import { buildPointMatcher, identityKey as diffIdentityKey } from "../../lib/importer/diffLigne";
 import type { CurrentTrain } from "../../lib/importer/diffTrains";
-import { pdf, Document, Page, StyleSheet } from "@react-pdf/renderer";
-import PdfBlocInfo2026 from "../pdf2026/PdfBlocInfo2026";
-import PdfBlocLtv from "../pdf/PdfBlocLtv";
-import PdfBlocFt2026 from "../pdf2026/PdfBlocFt2026";
-import { buildPdfInfoPropsForTrain2026 } from "../../modules/pdf2026/buildPdfInfoPropsForTrain2026";
-import { fetchLtvRows2026 } from "../../modules/pdf2026/buildLtvRows2026";
-import { buildFtRows2026 } from "../../modules/pdf2026/buildFtRows2026";
-import { paginateFtRows2026 } from "../../modules/pdf2026/paginateFt2026";
+import { fetchLigneFt2026Current, publishLigneFt2026Data } from "../../modules/ft-editor/api/ligneft2026Api";
 
 // Onglet « Normalisé 2026 » — construction du nouveau format de fiche train, champ
 // par champ. Le bouton « Valider » (futur « Publier ») génère un fichier normalisé
@@ -68,10 +61,40 @@ export type LignePoint = {
   pkLfp: string;
   pkRac: string;
   pkRfn: string; // réseau SNCF (RFN) — affiché « SNCF »
+  // PK interne : valeur physique unifiée sur toute la ligne (indépendante du réseau),
+  // reprise TELLE QUELLE de l'ancien normalisé (`ligneFT.normalized.json`) — PAS
+  // calculable depuis les PK réseau (vérifié : le segment RAC n'est pas sur une
+  // échelle 1:1 avec pkInterne). Optionnel pour ne pas casser les literals/imports
+  // existants qui n'en ont pas encore ; "" (ou absent) = inconnu.
+  pkInterne?: string;
   note?: string;
 };
 
-export const DEFAULT_LIGNE_SUD_NORD: LignePoint[] = [
+// PK interne des points HORS ADIF (les points ADIF ont pkInterne === pkAdif,
+// vérifié exact sur les 37 points ADIF de l'ancien normalisé) — valeurs reprises
+// telles quelles de `ligneFT.normalized.json`, identiques dans les deux sens
+// (vérifié : les 2 blocs direction de l'ancien fichier donnent les mêmes
+// valeurs, y compris pour les 3 points de transition dont les PK RÉSEAU locaux
+// diffèrent pourtant selon le sens — pkInterne, lui, ne dépend pas du sens).
+const PK_INTERNE_HORS_ADIF: Record<string, string> = {
+  "Tunnel du Perthus - tête sud": "771.2",
+  "Frontière Espagne France": "772.2",
+  "Frontière France Espagne": "772.2", // ordre des mots inversé côté nordSud
+  "Tunnel du Perthus - tête nord": "779.7",
+  "Saut de Mouton": "783.9",
+  "Limite LGV-Rac": "799.7",
+  "Limite RAC LFP-RFF": "802",
+  "PERPIGNAN BV": "805.5",
+};
+
+function withPkInterne(points: LignePoint[]): LignePoint[] {
+  return points.map((p) => {
+    if (p.type === "note") return { ...p, pkInterne: "" };
+    return { ...p, pkInterne: p.pkAdif || PK_INTERNE_HORS_ADIF[p.etablissement] || "" };
+  });
+}
+
+export const DEFAULT_LIGNE_SUD_NORD: LignePoint[] = withPkInterne([
   // — Section Can Tunis → Barcelona (fiche 39819) · ADIF —
   { bloc: "BCA", vmax: "30", radio: "G", rampe: "30", etcs: "1", etablissement: "CAN TUNIS-AV", pkAdif: "615.9", pkLfp: "", pkRac: "", pkRfn: "" },
   { bloc: "BCA", vmax: "95", radio: "G", rampe: "30", etcs: "1", etablissement: "BIF CAN TUNIS-AV", pkAdif: "616.0", pkLfp: "", pkRac: "", pkRfn: "" },
@@ -130,7 +153,7 @@ export const DEFAULT_LIGNE_SUD_NORD: LignePoint[] = [
   { bloc: "BAL", vmax: "160", radio: "G", rampe: "10", etcs: "", etablissement: "Limite RAC LFP-RFF", pkAdif: "", pkLfp: "", pkRac: "0", pkRfn: "471", note: "transition RAC/SNCF" },
   // — Page 2 · SNCF (RFN) —
   { bloc: "BAL", vmax: "160", radio: "G", rampe: "10", etcs: "", etablissement: "PERPIGNAN BV", pkAdif: "", pkLfp: "", pkRac: "", pkRfn: "467.5" },
-];
+]);
 
 // ---------------------------------------------------------------------------
 // DONNÉES LIGNE — SENS NORD → SUD (Perpignan → Can Tunis), 07/08.
@@ -150,7 +173,7 @@ export const DEFAULT_LIGNE_SUD_NORD: LignePoint[] = [
 // Sants→Can Tunis, comble le tronçon manquant — même rôle que 39819 côté
 // sud-nord). Horaires 38510 NON repris (train différent, ligne seulement).
 // ---------------------------------------------------------------------------
-export const DEFAULT_LIGNE_NORD_SUD: LignePoint[] = [
+export const DEFAULT_LIGNE_NORD_SUD: LignePoint[] = withPkInterne([
   // — Page 1 (9711) · SNCF (RFN) puis RAC —
   { bloc: "BAL", vmax: "160", radio: "G", rampe: "10", etcs: "", etablissement: "PERPIGNAN BV", pkAdif: "", pkLfp: "", pkRac: "", pkRfn: "467.5" },
   { bloc: "BAL", vmax: "160", radio: "G", rampe: "10", etcs: "", etablissement: "Limite RAC LFP-RFF", pkAdif: "", pkLfp: "", pkRac: "0", pkRfn: "471", note: "transition RAC/SNCF" },
@@ -215,7 +238,7 @@ export const DEFAULT_LIGNE_NORD_SUD: LignePoint[] = [
   // porte une ERREUR ici (il affiche 130), corrigée sur instruction utilisateur (07/08).
   { bloc: "BCA", vmax: "30", radio: "G", rampe: "25", etcs: "1", csv: true, etablissement: "BIF CAN TUNIS-AV", pkAdif: "616.0", pkLfp: "", pkRac: "", pkRfn: "" },
   { bloc: "BCA", vmax: "30", radio: "G", rampe: "25", etcs: "1", etablissement: "CAN TUNIS-AV", pkAdif: "615.9", pkLfp: "", pkRac: "", pkRfn: "" },
-];
+]);
 
 // Chaînes kilométriques dans l'ORDRE DU SENS DE CIRCULATION. Sur un point de
 // transition (2 PK), on affiche d'abord le PK du réseau QU'ON QUITTE, puis celui
@@ -262,7 +285,7 @@ function pkSummary(p: LignePoint): string {
 export type TrainHoraire = { arrivee: string; passage: string; depart: string };
 const EMPTY_HORAIRE: TrainHoraire = { arrivee: "", passage: "", depart: "" };
 
-type TrainDraft = {
+export type TrainDraft = {
   numeroEspagne: string;
   numeroFrance: string;
   origine: string;
@@ -380,7 +403,7 @@ const DEFAULT_MENTIONS: Mention[] = [
 // la version en cours avant cette date. Une seule version existe pour l'instant (v1) ;
 // la création d'une nouvelle version (import d'un document ultérieur) est le prochain
 // incrément naturel, pas encore construit.
-type LigneVersion = {
+export type LigneVersion = {
   numeroVersion: string;
   dateVigueur: string; // ISO (AAAA-MM-JJ) — date de vigueur DU DOCUMENT source
   sudNord: LignePoint[];
@@ -388,11 +411,11 @@ type LigneVersion = {
   mentions: Mention[];
 };
 
-const DEFAULT_LIGNE_VERSION_ID = "v1";
+export const DEFAULT_LIGNE_VERSION_ID = "v1";
 // « Version 01 du 04/08/2026 » — telle qu'imprimée sur la fiche 9705 source.
 const DEFAULT_DATE_VIGUEUR = "2026-08-04";
 
-function cloneDefaultLigneVersion(): LigneVersion {
+export function cloneDefaultLigneVersion(): LigneVersion {
   return {
     numeroVersion: "01",
     dateVigueur: DEFAULT_DATE_VIGUEUR,
@@ -407,9 +430,12 @@ function cloneDefaultLigneVersion(): LigneVersion {
 // ⚠️ COMPAT ANCIEN FORMAT : avant le versionnement, un train était { meta: {...} } à
 // plat. On le lit comme une variante implicite pour ne pas perdre les données déjà
 // validées dans le navigateur (ex. le 9705 construit tout au long de ce chantier).
-function readNormalizedLocal(): Record<string, TrainDraft> {
+// `rawOverride` : permet de réutiliser le même parsing sur un JSON venu
+// d'ailleurs que le localStorage (ex. le fichier 2026 publié en ligne, utilisé
+// comme filet de secours au chargement — cf. useEffect de récupération 09/08).
+export function readNormalizedLocal(rawOverride?: string): Record<string, TrainDraft> {
   try {
-    const raw = localStorage.getItem(NORMALIZED_LOCAL_KEY);
+    const raw = rawOverride ?? localStorage.getItem(NORMALIZED_LOCAL_KEY);
     if (!raw) return {};
     const doc = JSON.parse(raw) as {
       trains?: Record<
@@ -515,6 +541,7 @@ function parseLignePointRow(r: Record<string, unknown>, defaults: Map<string, Li
     pkLfp: str(r.pkLfp) || d?.pkLfp || "",
     pkRac: str(r.pkRac) || d?.pkRac || "",
     pkRfn: str(r.pkRfn) || d?.pkRfn || "",
+    pkInterne: str(r.pkInterne) || d?.pkInterne || "",
     note: d?.note,
   };
 }
@@ -524,9 +551,9 @@ function parseLignePointRow(r: Record<string, unknown>, defaults: Map<string, Li
 // ⚠️ COMPAT ANCIEN FORMAT : avant le versionnement, la ligne était un objet unique
 // `doc.ligne = { sudNord, mentions }` (pas de dictionnaire de versions). On la migre
 // en version par défaut pour ne pas perdre les données déjà validées.
-function readLigneVersionsLocal(): Record<string, LigneVersion> {
+export function readLigneVersionsLocal(rawOverride?: string): Record<string, LigneVersion> {
   try {
-    const raw = localStorage.getItem(NORMALIZED_LOCAL_KEY);
+    const raw = rawOverride ?? localStorage.getItem(NORMALIZED_LOCAL_KEY);
     if (!raw) return { [DEFAULT_LIGNE_VERSION_ID]: cloneDefaultLigneVersion() };
     const doc = JSON.parse(raw) as {
       ligneVersions?: Record<
@@ -599,9 +626,9 @@ function readLigneVersionsLocal(): Record<string, LigneVersion> {
 }
 
 // Relit le catalogue des matériels du fichier normalisé local (ou le défaut).
-function readMaterielsLocal(): Record<string, MaterielSpec> {
+function readMaterielsLocal(rawOverride?: string): Record<string, MaterielSpec> {
   try {
-    const raw = localStorage.getItem(NORMALIZED_LOCAL_KEY);
+    const raw = rawOverride ?? localStorage.getItem(NORMALIZED_LOCAL_KEY);
     if (!raw) return { ...DEFAULT_MATERIELS };
     const doc = JSON.parse(raw) as { materiels?: Record<string, { longueur?: unknown; masse?: unknown }> };
     if (!doc || typeof doc !== "object" || !doc.materiels || typeof doc.materiels !== "object") {
@@ -683,6 +710,36 @@ function secondaryBtn(disabled: boolean): React.CSSProperties {
     cursor: disabled ? "default" : "pointer",
   };
 }
+
+// Bouton Valider (futur Publier) : couleur volontairement DIFFÉRENTE du vert
+// (import) et du bleu (actions courantes) — un violet soutenu, pour qu'on ne le
+// confonde jamais avec « valider la sélection du train » (demande utilisateur,
+// 09/08) : c'est une action spéciale, qui publiera un jour les données.
+function validerBtn(disabled: boolean): React.CSSProperties {
+  return {
+    padding: "9px 20px",
+    borderRadius: 10,
+    border: "1px solid #6d28d9",
+    background: disabled ? "#c4b5fd" : "#6d28d9",
+    color: "#ffffff",
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: disabled ? "default" : "pointer",
+  };
+}
+
+// Bouton de sélection sens (non actif) — même gabarit que primaryBtn mais outline,
+// pour un toggle à 2 états (cadre Données ligne, 09/08).
+const secondaryOutlineBtn: React.CSSProperties = {
+  padding: "9px 16px",
+  borderRadius: 10,
+  border: "1px solid #d1d5db",
+  background: "#ffffff",
+  color: "#374151",
+  fontWeight: 700,
+  fontSize: 14,
+  cursor: "pointer",
+};
 
 const TH: React.CSSProperties = {
   textAlign: "left",
@@ -799,6 +856,7 @@ function ClickToEditCell({
   value,
   bold = false,
   red = false,
+  blue = false,
   alignRight = false,
   placeholder,
   onCommit,
@@ -806,6 +864,7 @@ function ClickToEditCell({
   value: string;
   bold?: boolean;
   red?: boolean; // notes : texte rouge
+  blue?: boolean; // donnée LIGNE : modifier change TOUS les trains
   alignRight?: boolean; // colonne KM
   placeholder?: string;
   onCommit: (value: string) => void;
@@ -813,7 +872,7 @@ function ClickToEditCell({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
-  const color = red ? "#b91c1c" : undefined;
+  const color = red ? "#b91c1c" : blue ? "#1d4ed8" : undefined;
 
   if (!editing) {
     return (
@@ -1020,6 +1079,10 @@ export default function Normalise2026Tab() {
   // incrément (quand une V2 sera importée/créée).
   const [currentVersionId] = useState<string>(DEFAULT_LIGNE_VERSION_ID);
   const [currentNumero, setCurrentNumero] = useState<string | null>(null);
+  // Sens affiché dans le cadre « Données ligne » (consultation) — INDÉPENDANT du
+  // sens du train sélectionné (demande utilisateur, 09/08) : ce cadre n'affichait
+  // jusqu'ici que le sens sud→nord, sans moyen de voir l'autre sens.
+  const [ligneViewDirection, setLigneViewDirection] = useState<"sudNord" | "nordSud">("sudNord");
   const [creating, setCreating] = useState(false);
   const [numeroInput, setNumeroInput] = useState("");
   const [numeroError, setNumeroError] = useState<string | null>(null);
@@ -1028,6 +1091,37 @@ export default function Normalise2026Tab() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // ---- Publication (09/08) : état de la modale + du résultat ----------------
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishSuccessMessage, setPublishSuccessMessage] = useState<string | null>(null);
+
+  // ---- Filet de secours (09/08) : si le localStorage est VIDE au chargement
+  // (perte locale, nouveau navigateur…), on va chercher le dernier normalisé
+  // 2026 PUBLIÉ en ligne plutôt que de repartir de zéro. Si le localStorage a
+  // déjà des trains, on NE TOUCHE À RIEN (c'est le brouillon en cours, qui a
+  // priorité — cf. discussion utilisateur : le local reste le brouillon,
+  // l'en-ligne n'est qu'un filet de secours/référence publiée).
+  useEffect(() => {
+    if (Object.keys(trains).length > 0) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, errorMessage } = await fetchLigneFt2026Current();
+      if (cancelled || errorMessage || !data) return;
+      const raw = JSON.stringify(data);
+      const recoveredTrains = readNormalizedLocal(raw);
+      if (Object.keys(recoveredTrains).length === 0) return;
+      setTrains(recoveredTrains);
+      setLigneVersions(readLigneVersionsLocal(raw));
+      setMateriels(readMaterielsLocal(raw));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const train = currentNumero ? trains[currentNumero] ?? null : null;
   const trainNumbers = Object.keys(trains).sort();
@@ -1052,12 +1146,6 @@ export default function Normalise2026Tab() {
     setLigneVersions((prev) => {
       const version = prev[currentVersionId] ?? cloneDefaultLigneVersion();
       return { ...prev, [currentVersionId]: { ...version, mentions: updater(version.mentions) } };
-    });
-  };
-  const updateLigneVersionField = (field: "numeroVersion" | "dateVigueur", value: string) => {
-    setLigneVersions((prev) => {
-      const version = prev[currentVersionId] ?? cloneDefaultLigneVersion();
-      return { ...prev, [currentVersionId]: { ...version, [field]: value } };
     });
   };
 
@@ -1411,8 +1499,52 @@ export default function Normalise2026Tab() {
     setCtxMenu(null);
   };
 
+  // PK interne d'un point NOUVEAU ou modifié : interpolé entre les deux points
+  // connus les plus proches PARTAGEANT LE MÊME RÉSEAU (avant ET après dans le
+  // sens de la ligne), au ratio RÉELLEMENT observé entre eux — pas un delta 1:1
+  // supposé. Vérifié sur l'ancien normalisé : le ratio vaut 1 sur ADIF et LFP
+  // (pkInterne suit le PK réseau à l'unité près), mais ≈0.51 sur RAC (la voie de
+  // RACcordement a sa propre échelle physique, plus courte que sa numérotation —
+  // piège dans lequel j'étais tombé en supposant 1:1 partout, corrigé 09/08).
+  // Si un seul voisin est trouvable (réseau avec un seul point archivé, ex.
+  // SNCF), repli sur un delta 1:1 depuis ce seul voisin — moins fiable, non vérifié.
+  function deriveInterneFor(points: LignePoint[], index: number, field: KmField, value: string): string {
+    const newLocal = parseFloat(value.replace(",", "."));
+    if (Number.isNaN(newLocal)) return "";
+
+    const findNeighbor = (dir: 1 | -1) => {
+      for (let i = index + dir; i >= 0 && i < points.length; i += dir) {
+        const p = points[i];
+        if (p.type === "note") continue;
+        const localStr = p[field];
+        const pk = parseFloat((localStr ?? "").replace(",", "."));
+        const interne = parseFloat((p.pkInterne ?? "").replace(",", "."));
+        if (!Number.isNaN(pk) && !Number.isNaN(interne)) return { local: pk, interne };
+      }
+      return null;
+    };
+
+    const before = findNeighbor(-1);
+    const after = findNeighbor(1);
+
+    if (before && after && before.local !== after.local) {
+      const ratio = (after.interne - before.interne) / (after.local - before.local);
+      return String(Math.round((before.interne + (newLocal - before.local) * ratio) * 100) / 100);
+    }
+    const single = before ?? after;
+    if (single) {
+      // Repli 1:1 (un seul voisin disponible) — cf. commentaire ci-dessus.
+      return String(Math.round((single.interne + (single.local - newLocal)) * 100) / 100);
+    }
+    return "";
+  }
+
   const updatePk = (index: number, field: KmField, value: string) => {
-    setLignePoints((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+    setLignePoints((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value, pkInterne: deriveInterneFor(prev, index, field, value) };
+      return next;
+    });
     setGeneratedJson(null);
   };
 
@@ -1459,6 +1591,7 @@ export default function Normalise2026Tab() {
             pkLfp: p.pkLfp,
             pkRac: p.pkRac,
             pkRfn: p.pkRfn,
+            pkInterne: p.pkInterne ?? "",
           }
     );
 
@@ -1510,57 +1643,15 @@ export default function Normalise2026Tab() {
     ),
   });
 
-  // ---- APERÇU PDF (bloc info 2026 seul, jalon en cours) --------------------------
-  const handlePreviewInfoPdf = async () => {
-    if (!train) return;
-    const props = buildPdfInfoPropsForTrain2026(train, currentLigneVersion);
-    // LTV : même source que ltv-viewer et l'ancien export (/api/ltv/current) — bloc
-    // repris TEL QUEL de l'ancien générateur (PdfBlocLtv), pas reconstruit, comme
-    // demandé. Échec de chargement non bloquant : l'aperçu se génère quand même,
-    // juste sans LTV (pratique hors-ligne / API indisponible).
-    const { rows: ltvRows, publishedAt: ltvPublishedAt, errorMessage: ltvError } =
-      await fetchLtvRows2026();
-    if (ltvError) console.warn("[aperçu PDF] LTV non chargées :", ltvError);
-    const ftRows = buildFtRows2026(
-      currentLigneVersion[train.direction],
-      train.direction,
-      train.origine,
-      train.destination,
-      train.horaires,
-      ltvRows
-    );
-    // Pagination : mêmes règles que l'ancien pipeline (LimPdf.tsx), confirmées
-    // applicables telles quelles par l'utilisateur (09/08) — seules les constantes
-    // de hauteur changent. cf. paginateFt2026.ts pour le détail.
-    const ftSegments = paginateFtRows2026(ftRows, ltvRows.length);
-    const styles = StyleSheet.create({ page: { padding: 20, fontFamily: "Helvetica" } });
-    const doc = (
-      <Document>
-        <Page size="A4" style={styles.page}>
-          <PdfBlocInfo2026 {...props} />
-          <PdfBlocLtv rows={ltvRows} publishedAt={ltvPublishedAt} />
-          <PdfBlocFt2026 rows={ftSegments[0] ?? []} />
-        </Page>
-        {ftSegments.slice(1).map((seg, idx) => (
-          <Page key={idx + 1} size="A4" style={styles.page}>
-            <PdfBlocFt2026 rows={seg} />
-          </Page>
-        ))}
-      </Document>
-    );
-    const blob = await pdf(doc).toBlob();
-    // Téléchargement direct (pas window.open) : les navigateurs bloquent les popups
-    // même synchrones dans certains contextes — vérifié en testant le vrai bouton, cf.
-    // mémoire projet. Même pattern que l'export PDF existant (`PdfExportPanel.tsx`).
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `apercu-bloc-info-${props.numero}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  // « Publier » ne doit être actif QUE s'il y a de vraies modifications en
+  // attente par rapport à ce qui est déjà persisté LOCALEMENT — même
+  // comportement que l'ancien pipeline (demande utilisateur, 09/08). Comparaison
+  // directe des deux sérialisations JSON (même sérialisation que
+  // `handleConfirmPublish` écrit) : pas de mémoïsation, recalcul à chaque
+  // rendu, mais bon marché.
+  const hasPendingChanges =
+    trainNumbers.length > 0 &&
+    JSON.stringify(buildNormalized(), null, 2) !== (localStorage.getItem(NORMALIZED_LOCAL_KEY) ?? "");
 
   // ---- IMPORTATEUR : classeurs Excel → diffs → modale → application --------------
   const handleImportFiles = async (files: FileList | null) => {
@@ -1656,14 +1747,46 @@ export default function Normalise2026Tab() {
     setImportResult(null);
   };
 
-  const handleValider = () => {
-    if (trainNumbers.length === 0) return;
-    const json = JSON.stringify(buildNormalized(), null, 2);
-    setGeneratedJson(json);
+  // « Publier » (ex-Valider, 09/08) : ouvre une modale de confirmation (comme
+  // l'ancien Publier), puis sur confirmation, enregistre le brouillon local ET
+  // pousse vers le fichier 2026 publié en ligne (repo lim-editor, chemin
+  // SÉPARÉ de l'ancien format — cohabitation temporaire, cf. mémoire projet).
+  const handlePublishClick = () => {
+    if (!hasPendingChanges || isPublishing) return;
+    setPublishError(null);
+    setPublishSuccessMessage(null);
+    setShowPublishModal(true);
+  };
+
+  const handleCancelPublish = () => {
+    if (isPublishing) return;
+    setShowPublishModal(false);
+  };
+
+  const handleConfirmPublish = async () => {
+    if (isPublishing) return;
+    setIsPublishing(true);
+    setPublishError(null);
     try {
-      localStorage.setItem(NORMALIZED_LOCAL_KEY, json);
-    } catch {
-      // stockage indisponible → la génération reste affichée.
+      const normalized = buildNormalized();
+      const json = JSON.stringify(normalized, null, 2);
+      setGeneratedJson(json);
+      try {
+        localStorage.setItem(NORMALIZED_LOCAL_KEY, json);
+      } catch {
+        // stockage indisponible → la publication en ligne reste tentée quand même.
+      }
+      const diagnostic = await publishLigneFt2026Data(normalized);
+      setPublishSuccessMessage(
+        diagnostic.archiveCreated
+          ? `Publication réussie (archive créée : ${diagnostic.archiveCreated.name}). La mise à jour peut nécessiter quelques minutes avant d'être visible en ligne.`
+          : "Publication réussie (1er publish — aucune archive à créer). La mise à jour peut nécessiter quelques minutes avant d'être visible en ligne."
+      );
+      setShowPublishModal(false);
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : "Erreur inconnue.");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -1698,15 +1821,6 @@ export default function Normalise2026Tab() {
             ))}
             <option value={ADD_CUSTOM_SENTINEL}>➕ Créer un train…</option>
           </select>
-          <button
-            type="button"
-            onClick={handleValider}
-            disabled={trainNumbers.length === 0}
-            style={secondaryBtn(trainNumbers.length === 0)}
-            title="Génère un fichier normalisé (provisoire — deviendra « Publier »)"
-          >
-            Valider
-          </button>
           <label
             style={{
               ...secondaryBtn(importBusy),
@@ -1717,7 +1831,7 @@ export default function Normalise2026Tab() {
             }}
             title="Importer les classeurs Excel source (un ou deux fichiers) et examiner les divergences avant application"
           >
-            📥 {importBusy ? "Analyse en cours…" : "Importer un document…"}
+            📥 {importBusy ? "Analyse en cours…" : "Importer des trains"}
             <input
               type="file"
               accept=".xlsx"
@@ -1733,40 +1847,24 @@ export default function Normalise2026Tab() {
           {importError ? (
             <span style={{ color: "#b91c1c", fontSize: 13 }}>Import impossible : {importError}</span>
           ) : null}
+          {/* À l'écart du reste (marginLeft: auto) et d'une couleur volontairement
+              distincte (violet) — ce n'est PAS un bouton lié à la sélection du
+              train, c'est l'action de publication du normalisé 2026 (demande
+              utilisateur, 09/08). Actif seulement s'il y a de vraies modifications
+              en attente par rapport à ce qui est déjà persisté localement. */}
           <button
             type="button"
-            onClick={() => void handlePreviewInfoPdf()}
-            disabled={!train}
-            style={secondaryBtn(!train)}
-            title="Aperçu PDF du bloc info (jalon en cours — reproduit l'en-tête du document source)"
+            onClick={handlePublishClick}
+            disabled={!hasPendingChanges || isPublishing}
+            style={{ ...validerBtn(!hasPendingChanges || isPublishing), marginLeft: "auto" }}
+            title="Publie le normalisé 2026 (fichier séparé de l'ancien normalisé, avec archivage)"
           >
-            🧾 Aperçu bloc info PDF
+            {isPublishing ? "Publication…" : "Publier"}
           </button>
         </div>
-
-        {/* Version DES DONNÉES LIGNE (une seule pour l'instant, v1). Chaque variante
-            de train référence cette version + sa propre date de vigueur (cadre
-            « Données train »). */}
-        <div style={{ marginTop: 14, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={{ maxWidth: 160 }}>
-            <div style={LABEL}>N° de version (document)</div>
-            <input
-              value={currentLigneVersion.numeroVersion}
-              onChange={(e) => updateLigneVersionField("numeroVersion", e.target.value)}
-              placeholder="ex. 01"
-              style={INPUT}
-            />
-          </div>
-          <div style={{ maxWidth: 200 }}>
-            <div style={LABEL}>Date de vigueur (données ligne)</div>
-            <input
-              type="date"
-              value={currentLigneVersion.dateVigueur}
-              onChange={(e) => updateLigneVersionField("dateVigueur", e.target.value)}
-              style={INPUT}
-            />
-          </div>
-        </div>
+        {publishSuccessMessage ? (
+          <div style={{ marginTop: 10, fontSize: 13, color: "#15803d" }}>✅ {publishSuccessMessage}</div>
+        ) : null}
 
         {creating ? (
           <div
@@ -1969,6 +2067,79 @@ export default function Normalise2026Tab() {
               ({currentDirection === "nordSud" ? "sens nord → sud" : "sens sud → nord"})
             </span>
           </div>
+
+          {/* Mentions (données ligne) — affichées par LIM au-dessus de la fiche train.
+              Déplacées ici depuis le cadre « Données ligne » (09/08, demande
+              utilisateur) : plus logique au même endroit que ce qu'elles accompagnent. */}
+          <div style={{ maxWidth: 720, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>
+              Mentions (affichées au-dessus de la fiche train)
+            </div>
+            <div style={{ fontSize: 12, color: "#1d4ed8", marginBottom: 8 }}>
+              ⚠️ Donnée ligne : modifier une mention ici la change pour TOUS les trains.
+            </div>
+            {mentions.map((m, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                <input
+                  value={m.titre}
+                  onChange={(e) => updateMention(i, "titre", e.target.value)}
+                  placeholder="Titre"
+                  style={{ ...INPUT, flex: 1 }}
+                />
+                <input
+                  value={m.contenu}
+                  onChange={(e) => updateMention(i, "contenu", e.target.value)}
+                  placeholder="Contenu"
+                  style={{ ...INPUT, flex: 3 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeMention(i)}
+                  title="Supprimer cette mention"
+                  style={{
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#b91c1c",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addMention}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid #6b7280",
+                background: "#ffffff",
+                color: "#374151",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              ➕ Ajouter une mention
+            </button>
+          </div>
+
+          {/* Légende ligne/train (09/08, demande utilisateur) : couleur des cellules
+              éditables de la fiche train ci-dessous. */}
+          <div style={{ display: "flex", gap: 20, alignItems: "center", fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
+            <span>
+              <span style={{ color: "#1d4ed8", fontWeight: 700 }}>■</span> donnée ligne — modifie TOUS les trains
+            </span>
+            <span>
+              <span style={{ color: "#111827", fontWeight: 700 }}>■</span> donnée train — modifie ce train seulement
+            </span>
+          </div>
+
           {ficheTrainSlice == null ? (
             <div style={{ fontSize: 13, color: "#6b7280" }}>
               Choisissez l'origine et la destination du train (cadre « Données train »)
@@ -2058,6 +2229,7 @@ export default function Normalise2026Tab() {
                           ) : null}
                           <ClickToEditCell
                             value={p.bloc}
+                            blue
                             onCommit={(v) => updateBloc(index, v)}
                           />
                         </td>
@@ -2082,6 +2254,7 @@ export default function Normalise2026Tab() {
                           ) : null}
                           <ClickToEditCell
                             value={p.vmax}
+                            blue
                             onCommit={(v) => updateVmax(index, v)}
                           />
                         </td>
@@ -2089,6 +2262,7 @@ export default function Normalise2026Tab() {
                           {kms.length === 0 ? (
                             <ClickToEditCell
                               value=""
+                              blue
                               alignRight
                               onCommit={(v) => updatePk(index, kmFieldForEmptyRow(index), v)}
                             />
@@ -2097,6 +2271,7 @@ export default function Normalise2026Tab() {
                               <ClickToEditCell
                                 key={field}
                                 value={value}
+                                blue
                                 alignRight
                                 onCommit={(v) => updatePk(index, field, v)}
                               />
@@ -2119,6 +2294,7 @@ export default function Normalise2026Tab() {
                                 <ClickToEditCell
                                   value={p.etablissement}
                                   bold
+                                  blue
                                   onCommit={(v) => renameEtablissement(index, v)}
                                 />
                               </td>
@@ -2157,7 +2333,7 @@ export default function Normalise2026Tab() {
                               }}
                             />
                           ) : null}
-                          <ClickToEditCell value={p.radio} onCommit={(v) => updateRadio(index, v)} />
+                          <ClickToEditCell value={p.radio} blue onCommit={(v) => updateRadio(index, v)} />
                         </td>
                         <td style={{ ...cellTD, textAlign: "center", verticalAlign: "top" }}>
                           {rampeBarIndexes.has(index) ? (
@@ -2170,7 +2346,7 @@ export default function Normalise2026Tab() {
                               }}
                             />
                           ) : null}
-                          <ClickToEditCell value={p.rampe} onCommit={(v) => updateRampe(index, v)} />
+                          <ClickToEditCell value={p.rampe} blue onCommit={(v) => updateRampe(index, v)} />
                         </td>
                         <td style={{ ...cellTD, textAlign: "center", verticalAlign: "top" }}>
                           {etcsBarIndexes.has(index) ? (
@@ -2183,7 +2359,7 @@ export default function Normalise2026Tab() {
                               }}
                             />
                           ) : null}
-                          <ClickToEditCell value={p.etcs} onCommit={(v) => updateEtcs(index, v)} />
+                          <ClickToEditCell value={p.etcs} blue onCommit={(v) => updateEtcs(index, v)} />
                         </td>
                       </tr>
                     );
@@ -2196,74 +2372,37 @@ export default function Normalise2026Tab() {
 
       {/* ================= CADRE 4 — Données ligne (socle commun) ================= */}
       <div style={CARD}>
-        <div style={CARD_TITLE}>
-          Données ligne{" "}
-          <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 13 }}>
-            ({currentDirection === "nordSud" ? "sens nord → sud" : "sens sud → nord"}
-            {train ? "" : " — aucun train sélectionné"})
-          </span>
+        <div style={CARD_TITLE}>Données ligne</div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+          👁️ Cadre en CONSULTATION uniquement — pas éditable ici (l'édition se fait dans la fiche train ci-dessus).
         </div>
 
-        {/* Mentions (données ligne) — affichées par LIM au-dessus de la fiche train */}
-        <div style={{ maxWidth: 720, marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-            Mentions (affichées au-dessus de la fiche train)
-          </div>
-          {mentions.map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-              <input
-                value={m.titre}
-                onChange={(e) => updateMention(i, "titre", e.target.value)}
-                placeholder="Titre"
-                style={{ ...INPUT, flex: 1 }}
-              />
-              <input
-                value={m.contenu}
-                onChange={(e) => updateMention(i, "contenu", e.target.value)}
-                placeholder="Contenu"
-                style={{ ...INPUT, flex: 3 }}
-              />
-              <button
-                type="button"
-                onClick={() => removeMention(i)}
-                title="Supprimer cette mention"
-                style={{
-                  padding: "7px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #d1d5db",
-                  background: "#ffffff",
-                  color: "#b91c1c",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+        {/* Sens affiché : sélecteur indépendant du train sélectionné (demande
+            utilisateur, 09/08) — auparavant hardcodé sur sud→nord. */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <button
             type="button"
-            onClick={addMention}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 8,
-              border: "1px solid #6b7280",
-              background: "#ffffff",
-              color: "#374151",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            onClick={() => setLigneViewDirection("sudNord")}
+            style={ligneViewDirection === "sudNord" ? primaryBtn(false) : secondaryOutlineBtn}
           >
-            ➕ Ajouter une mention
+            Sud → Nord
+          </button>
+          <button
+            type="button"
+            onClick={() => setLigneViewDirection("nordSud")}
+            style={ligneViewDirection === "nordSud" ? primaryBtn(false) : secondaryOutlineBtn}
+          >
+            Nord → Sud
           </button>
         </div>
 
-        {/* Tableau complet de la ligne — sens SUD → NORD, un PK par réseau */}
+        {/* Tableau complet de la ligne, un PK par réseau */}
         <div style={{ maxWidth: 780 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-            Sens SUD → NORD (Can Tunis → Perpignan) · un PK par réseau
+            {ligneViewDirection === "nordSud"
+              ? "Sens NORD → SUD (Perpignan → Can Tunis)"
+              : "Sens SUD → NORD (Can Tunis → Perpignan)"}{" "}
+            · un PK par réseau
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13 }}>
@@ -2275,6 +2414,9 @@ export default function Normalise2026Tab() {
                   <th style={{ ...TH, width: 55 }}>Radio</th>
                   <th style={{ ...TH, width: 45 }}>↗</th>
                   <th style={{ ...TH, width: 45 }}>ETCS</th>
+                  <th style={{ ...TH, width: 80 }} title="Valeur physique unifiée, reprise de l'ancien normalisé — pas une donnée saisie">
+                    PK interne
+                  </th>
                   <th style={{ ...TH, width: 70 }}>ADIF</th>
                   <th style={{ ...TH, width: 60 }}>LFP</th>
                   <th style={{ ...TH, width: 60 }}>RAC</th>
@@ -2284,11 +2426,11 @@ export default function Normalise2026Tab() {
                 </tr>
               </thead>
               <tbody>
-                {lignePoints.map((p, i) =>
+                {currentLigneVersion[ligneViewDirection].map((p, i) =>
                   p.type === "note" ? (
                     <tr key={i}>
                       <td
-                        colSpan={12}
+                        colSpan={13}
                         style={{
                           ...TD,
                           fontVariantNumeric: "normal",
@@ -2308,6 +2450,9 @@ export default function Normalise2026Tab() {
                     <td style={{ ...TD, fontVariantNumeric: "normal" }}>{p.radio}</td>
                     <td style={{ ...TD, fontVariantNumeric: "normal" }}>{p.rampe}</td>
                     <td style={{ ...TD, fontVariantNumeric: "normal" }}>{p.etcs}</td>
+                    <td style={{ ...TD, fontWeight: 600 }} title="Repris de l'ancien normalisé — pas une donnée saisie">
+                      {p.pkInterne || ""}
+                    </td>
                     <td style={TD}>{p.pkAdif}</td>
                     <td style={TD}>{p.pkLfp}</td>
                     <td style={TD}>{p.pkRac}</td>
@@ -2453,6 +2598,86 @@ export default function Normalise2026Tab() {
           onApply={handleApplyImport}
           onClose={() => setImportResult(null)}
         />
+      ) : null}
+
+      {/* Modale de confirmation « Publier » (09/08) — même gabarit que
+          ImportDiffModal (overlay + carte centrée). Publie sur le repo
+          lim-editor, fichier normalisé 2026 SÉPARÉ de l'ancien (cohabitation
+          temporaire, cf. mémoire projet). */}
+      {showPublishModal ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: 16,
+              width: "min(520px, 92vw)",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+              padding: 24,
+            }}
+          >
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12 }}>Publier le normalisé 2026 ?</div>
+            <div style={{ fontSize: 13.5, color: "#374151", lineHeight: 1.5, marginBottom: 10 }}>
+              Cette action va publier le document normalisé 2026 sur GitHub (repo lim-editor,
+              fichier séparé de l'ancien normalisé — les deux cohabitent pour l'instant).
+              L'ancien contenu sera archivé automatiquement avant écrasement.
+            </div>
+            <div style={{ fontSize: 13.5, color: "#374151", lineHeight: 1.5, marginBottom: 18 }}>
+              Cette publication ne concerne QUE l'éditeur (pas encore LIM/LIM2).
+            </div>
+            {publishError ? (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "#b91c1c",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  marginBottom: 14,
+                }}
+              >
+                ❌ {publishError}
+              </div>
+            ) : null}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                type="button"
+                onClick={handleCancelPublish}
+                disabled={isPublishing}
+                style={{
+                  padding: "9px 16px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#374151",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: isPublishing ? "default" : "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPublish}
+                disabled={isPublishing}
+                style={{ ...validerBtn(isPublishing), minWidth: 140 }}
+              >
+                {isPublishing ? "Publication…" : "Confirmer"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

@@ -16,7 +16,7 @@
 import { detectCsvZones } from "../ft-editor/utils/csvZoneDetection";
 import type { PdfLtvRow } from "../../components/pdf/LimPdf";
 
-type LignePointLike = {
+export type LignePointLike = {
   type?: "note";
   surligne?: boolean; // note uniquement
   bloc: string;

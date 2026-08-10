@@ -44,9 +44,9 @@ import { detectCsvZones } from "../modules/ft-editor/utils/csvZoneDetection";
 import { PDFViewer } from "@react-pdf/renderer";
 import LimPdf from "../components/pdf/LimPdf";
 import type { PdfFtRow, PdfLtvRow } from "../components/pdf/LimPdf";
-import PdfExportPanel from "../components/export/PdfExportPanel";
+import PdfExportPanel2026 from "../components/export/PdfExportPanel2026";
 import FTTab from "../components/tabs/FTTab";
-import ExportTab from "../components/tabs/ExportTab";
+import Export2026Preview from "../components/tabs/Export2026Preview";
 import HoraireTab from "../components/tabs/HoraireTab";
 import LTVTab from "../components/tabs/LTVTab";
 import DocumentsTab from "../components/tabs/DocumentsTab";
@@ -4650,12 +4650,16 @@ export default function FTEditorPage() {
               }}
             >
               {[
-                { id: "FT" as const, label: "Données ligne" },
-                { id: "HORAIRE" as const, label: "Données horaires" },
+                { id: "NORMALISE_2026" as const, label: "Fiches Train" },
+                // Masqués sur demande utilisateur (09/08) — ancien format devenu
+                // inutile au quotidien. Code/contenu de ces onglets INTACT plus bas
+                // (rendu conditionnel sur `activeTab`, inchangé) : ne retirer que ces
+                // 2 lignes pour les restaurer.
+                // { id: "FT" as const, label: "Données ligne" },
+                // { id: "HORAIRE" as const, label: "Données horaires" },
                 { id: "LTV" as const, label: "LTV" },
                 { id: "EXPORT" as const, label: "Export LIM PDF" },
                 { id: "DOCUMENTS" as const, label: "Documents" },
-                { id: "NORMALISE_2026" as const, label: "Normalisé 2026" },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
 
@@ -4752,28 +4756,7 @@ export default function FTEditorPage() {
                 onInlineConcCommit={handleApplyConcForSelectedTrain}
               />
             ) : activeTab === "EXPORT" ? (
-              <ExportTab
-                exportTrainNumber={exportTrainNumber}
-                onExportTrainNumberChange={setExportTrainNumber}
-                availableTrainNumbers={availableTrainNumbers}
-                exportComposition={exportComposition}
-                onExportCompositionToggle={handleExportCompositionToggle}
-                exportDate={exportDate}
-                onExportDateChange={setExportDate}
-                todayIso={todayIso}
-                tomorrowIso={tomorrowIso}
-                exportAllVariantInfos={exportAllVariantInfos}
-                exportAutoVariantIndex={exportAutoVariantIndex}
-                exportVariantIndex={exportVariantIndex}
-                onExportVariantOverrideIndexChange={setExportVariantOverrideIndex}
-                exportVariant={exportVariant}
-                exportDateFormatted={exportDateFormatted}
-                exportLongueur={exportLongueur}
-                exportMasse={exportMasse}
-                exportLtvRowsFiltered={exportLtvRowsFiltered}
-                exportLtvPublishedAt={ltvNormalizedFileInfo?.publishedAt ?? null}
-                exportFtRowsFinal={exportFtRowsFinal}
-              />
+              <Export2026Preview />
             ) : activeTab === "DOCUMENTS" ? (
               <DocumentsTab />
             ) : activeTab === "NORMALISE_2026" ? (
@@ -5889,15 +5872,7 @@ export default function FTEditorPage() {
                 background: "#ffffff",
               }}
             >
-              <PdfExportPanel
-                availableTrainNumbers={availableTrainNumbers}
-                parsedSource={parsedSource}
-                ltvNormalizedRows={ltvNormalizedRows}
-                ltvPublishedAt={ltvNormalizedFileInfo?.publishedAt ?? null}
-                todayIso={todayIso}
-                tomorrowIso={tomorrowIso}
-                activeTrainNumber={exportTrainNumber}
-              />
+              <PdfExportPanel2026 />
             </div>
           ) : (
             <div
