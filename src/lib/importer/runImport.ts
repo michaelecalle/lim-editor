@@ -7,7 +7,7 @@ import { buildCandidateLigne, openClasseur } from "./buildCandidateLigne";
 import { buildCandidateTrains, type CandidateTrain } from "./buildCandidateTrains";
 import { diffLignePoints, type LigneDiff } from "./diffLigne";
 import { diffTrains, type CurrentTrain, type TrainDiff } from "./diffTrains";
-import type { LignePoint } from "../../components/tabs/Normalise2026Tab";
+import { deriveTrainDirection, type LignePoint } from "../../components/tabs/Normalise2026Tab";
 
 export type ImportResult = {
   ligneDiffs: LigneDiff[];
@@ -26,6 +26,19 @@ export async function runImport(
   const ligne = await buildCandidateLigne(classeurs);
   const candidates: CandidateTrain[] = [];
   for (const c of classeurs) candidates.push(...(await buildCandidateTrains(c)));
+
+  // Sens de circulation : re-déduit d'origine/destination (comparaison à l'ordre
+  // réel des données ligne) plutôt que de garder le repli "1er point du classeur"
+  // de buildCandidateTrains — même fonction canonique que l'édition manuelle
+  // (demande utilisateur, 11/08, suite au bug 38510/9711/9713/9715). Essaie
+  // d'abord contre la ligne COURANTE (cas normal), puis contre la ligne
+  // fraîchement importée (cas d'un établissement tout juste ajouté par cet
+  // import) ; si les deux sont indéterminables, garde le repli existant.
+  for (const c of candidates) {
+    const fromCurrent = deriveTrainDirection(currentLigne.sudNord, currentLigne.nordSud, c.origine, c.destination);
+    const fromImported = fromCurrent ?? deriveTrainDirection(ligne.sudNord, ligne.nordSud, c.origine, c.destination);
+    if (fromImported) c.direction = fromImported;
+  }
 
   const dateVigueur = candidates.find((c) => c.dateVigueur)?.dateVigueur ?? "";
   const ligneDiffs = [

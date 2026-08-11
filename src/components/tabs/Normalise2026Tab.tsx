@@ -267,6 +267,38 @@ function deduceReseau(p: LignePoint): string {
   return nets.join(" / ");
 }
 
+// Déduit le sens de circulation d'un train à partir de son origine/destination,
+// en comparant leur ordre RÉEL dans les deux tableaux de ligne — plutôt que de
+// stocker/importer `direction` comme un champ séparé, source d'erreur humaine
+// (trains 38510/9711/9713/9715, 11/08) et perdu à chaque ré-import Excel.
+// Retourne null si origine/destination sont vides, introuvables, ou ambigus
+// (présents dans les deux sens avec un ordre cohérent — ne devrait pas arriver
+// en pratique, la ligne n'a qu'un physique sens par tableau).
+type DirectionLookupRow = { type?: "note"; etablissement?: string };
+
+export function deriveTrainDirection(
+  sudNord: DirectionLookupRow[],
+  nordSud: DirectionLookupRow[],
+  origine: string,
+  destination: string
+): "sudNord" | "nordSud" | null {
+  if (!origine || !destination) return null;
+  const indexOf = (points: DirectionLookupRow[], etab: string) =>
+    points.findIndex((p) => p.type !== "note" && p.etablissement === etab);
+
+  const checkTable = (points: DirectionLookupRow[]): boolean => {
+    const startIdx = indexOf(points, origine);
+    const endIdx = indexOf(points, destination);
+    return startIdx !== -1 && endIdx !== -1 && startIdx < endIdx;
+  };
+
+  const sudNordOk = checkTable(sudNord);
+  const nordSudOk = checkTable(nordSud);
+  if (sudNordOk && !nordSudOk) return "sudNord";
+  if (nordSudOk && !sudNordOk) return "nordSud";
+  return null;
+}
+
 // Résumé PK lisible (réseau + valeur) pour les libellés du sélecteur origine/destination.
 function pkSummary(p: LignePoint): string {
   const parts: string[] = [];
@@ -1206,7 +1238,23 @@ export default function Normalise2026Tab() {
     setTrains((prev) => {
       const cur = prev[currentNumero];
       if (!cur) return prev;
-      return { ...prev, [currentNumero]: { ...cur, [field]: value } };
+      const next = { ...cur, [field]: value };
+      // Sens de circulation DÉDUIT d'origine/destination, jamais saisi à part
+      // (demande utilisateur, 11/08 : un champ séparé était source d'erreur —
+      // trains 38510/9711/9713/9715 — et se réécrasait à chaque ré-import).
+      // Recalculé à chaque changement d'origine/destination ; si indéterminable
+      // (l'un des deux vide, ou établissement introuvable), la valeur en cours
+      // est conservée telle quelle plutôt que d'être effacée.
+      if (field === "origine" || field === "destination") {
+        const derived = deriveTrainDirection(
+          currentLigneVersion.sudNord,
+          currentLigneVersion.nordSud,
+          field === "origine" ? value : cur.origine,
+          field === "destination" ? value : cur.destination
+        );
+        if (derived) next.direction = derived;
+      }
+      return { ...prev, [currentNumero]: next };
     });
     setGeneratedJson(null);
   };
@@ -1982,17 +2030,12 @@ export default function Normalise2026Tab() {
                 immédiatement la version en cours). */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
               <div>
-                <div style={LABEL} title="Doit correspondre à l'ordre réel des PK entre origine et destination — sinon la fiche train se construit sur toute la ligne ou à l'envers.">
+                <div style={LABEL} title="Déduit automatiquement d'Origine/Destination — pas éditable directement (11/08 : un champ saisi à part était source d'erreur et se perdait à chaque ré-import).">
                   Sens de circulation
                 </div>
-                <select
-                  value={train.direction}
-                  onChange={(e) => updateField("direction", e.target.value === "nordSud" ? "nordSud" : "sudNord")}
-                  style={INPUT}
-                >
-                  <option value="sudNord">Sud → Nord</option>
-                  <option value="nordSud">Nord → Sud</option>
-                </select>
+                <div style={{ ...INPUT, background: "#f3f4f6", display: "flex", alignItems: "center" }}>
+                  {train.direction === "nordSud" ? "Nord → Sud" : "Sud → Nord"}
+                </div>
               </div>
               <div>
                 <div style={LABEL}>Version des données ligne</div>
