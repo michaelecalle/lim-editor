@@ -30,7 +30,7 @@ export function buildTrainPdfDocument2026(
   ltvPublishedAt: string | null
 ) {
   const props = buildPdfInfoPropsForTrain2026(train, ligneVersion);
-  const ftRows = buildFtRows2026(
+  const { rows: ftRows, filteredLtvRows } = buildFtRows2026(
     ligneVersion[train.direction],
     train.direction,
     train.origine,
@@ -38,13 +38,13 @@ export function buildTrainPdfDocument2026(
     horaires,
     ltvRows
   );
-  const ftSegments = paginateFtRows2026(ftRows, ltvRows.length);
+  const ftSegments = paginateFtRows2026(ftRows, filteredLtvRows.length);
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <PdfBlocInfo2026 {...props} />
-        <PdfBlocLtv rows={ltvRows} publishedAt={ltvPublishedAt} />
+        <PdfBlocLtv rows={filteredLtvRows} publishedAt={ltvPublishedAt} />
         <PdfBlocFt2026 rows={ftSegments[0] ?? []} />
       </Page>
       {ftSegments.slice(1).map((seg, idx) => (

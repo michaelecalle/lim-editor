@@ -90,7 +90,7 @@ export function buildFtRows2026(
   destination: string,
   horaires: Record<string, { arrivee: string; passage: string; depart: string }>,
   ltvRows: PdfLtvRow[] = []
-): PdfFtRow2026[] {
+): { rows: PdfFtRow2026[]; filteredLtvRows: PdfLtvRow[] } {
   const identityKey = (p: LignePointLike) => `${p.pkAdif}|${p.pkLfp}|${p.pkRac}|${p.pkRfn}`;
 
   // Tronque la séquence entre origine et destination (notes comprises), comme
@@ -321,7 +321,7 @@ export function buildFtRows2026(
   let lastRampe = "";
   let lastEtcs = "";
 
-  return rawRows.map((row) => {
+  const finalRows = rawRows.map((row) => {
     let showVBar = false, showRampeBar = false, showBlocBar = false, showRadioBar = false, showEtcsBar = false;
 
     // ⚠️ lastBloc/lastRadio/lastRampe ne doivent être comparés/mis à jour QUE sur les
@@ -372,4 +372,11 @@ export function buildFtRows2026(
       ltvNote: ltvNoteMap.get(row.id)?.join("\n") ?? "",
     };
   });
+
+  // Exposé pour le bloc LTV séparé en tête de PDF (demande utilisateur, 11/08) :
+  // il recevait jusqu'ici le tableau LTV COMPLET, pas filtré par parcours du
+  // train, contrairement à l'ancien pipeline (`buildPdfPropsForTrain.ts`) qui
+  // filtrait déjà par recouvrement PK — écart non voulu, corrigé en réutilisant
+  // le même `filteredLtv` que les notes LTV insérées dans le tableau FT.
+  return { rows: finalRows, filteredLtvRows: filteredLtv };
 }
