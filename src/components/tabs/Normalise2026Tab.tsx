@@ -1784,10 +1784,14 @@ export default function Normalise2026Tab() {
         // stockage indisponible → la publication en ligne reste tentée quand même.
       }
       const diagnostic = await publishLigneFt2026Data(normalized);
+      const editorPart = diagnostic.archiveCreated
+        ? `Éditeur publié (archive créée : ${diagnostic.archiveCreated.name}).`
+        : "Éditeur publié (1er publish — aucune archive à créer).";
+      const lim2Part = diagnostic.lim2Published
+        ? " LIM2 publié."
+        : ` ⚠️ Publication LIM2 échouée (${diagnostic.lim2Error ?? "erreur inconnue"}) — l'éditeur reste à jour, réessaie la publication pour LIM2.`;
       setPublishSuccessMessage(
-        diagnostic.archiveCreated
-          ? `Publication réussie (archive créée : ${diagnostic.archiveCreated.name}). La mise à jour peut nécessiter quelques minutes avant d'être visible en ligne.`
-          : "Publication réussie (1er publish — aucune archive à créer). La mise à jour peut nécessiter quelques minutes avant d'être visible en ligne."
+        `${editorPart}${lim2Part} La mise à jour peut nécessiter quelques minutes avant d'être visible en ligne.`
       );
       setShowPublishModal(false);
     } catch (error) {

@@ -15,6 +15,7 @@ import {
 import { LigneFtGithubError, LigneFtValidationError } from "../ligneft/errors.js";
 import {
   ACTIVE_2026_JSON_FILE_PATH,
+  LIM2_ACTIVE_2026_JSON_FILE_PATH,
   ARCHIVES_2026_DIR_PATH,
   MAX_ARCHIVES_2026,
 } from "./constants.js";
@@ -80,6 +81,11 @@ export type Publish2026Diagnostic = {
   publishedPath: string;
   archiveCreated: { name: string; path: string } | null;
   purgedArchives: string[];
+  // Publication miroir vers LIM2 (repo séparé) : n'interrompt PAS la publication
+  // éditeur si elle échoue (celle-ci est déjà écrite sur GitHub à ce stade) —
+  // le diagnostic remonte l'échec séparément plutôt qu'un échec global trompeur.
+  lim2Published: boolean;
+  lim2Error: string | null;
 };
 
 export async function publish2026NormalizedData(data: unknown): Promise<Publish2026Diagnostic> {
@@ -119,7 +125,34 @@ export async function publish2026NormalizedData(data: unknown): Promise<Publish2
 
   const purgedArchives = await purgeOldArchives2026(MAX_ARCHIVES_2026);
 
-  return { publishedPath: ACTIVE_2026_JSON_FILE_PATH, archiveCreated, purgedArchives };
+  // Publication miroir vers LIM2 (repo séparé, fichier EMBARQUÉ côté LIM — pas
+  // de fetch réseau en cabine, cf. constants.ts). Volontairement APRÈS et
+  // SÉPARÉE de la publication éditeur ci-dessus, qui est déjà écrite sur GitHub
+  // à ce stade : un échec ici ne doit pas faire remonter un échec global
+  // trompeur alors que l'éditeur a réellement été publié.
+  let lim2Published = false;
+  let lim2Error: string | null = null;
+  try {
+    const lim2Sha = await githubGetFileSha(LIM2_ACTIVE_2026_JSON_FILE_PATH, "lim2");
+    await githubPutFile(
+      LIM2_ACTIVE_2026_JSON_FILE_PATH,
+      nextContent,
+      "Publish updated ligneFT2026.normalized.json for LIM2",
+      lim2Sha ?? undefined,
+      "lim2"
+    );
+    lim2Published = true;
+  } catch (error) {
+    lim2Error = error instanceof Error ? error.message : "Erreur inconnue lors de la publication vers LIM2.";
+  }
+
+  return {
+    publishedPath: ACTIVE_2026_JSON_FILE_PATH,
+    archiveCreated,
+    purgedArchives,
+    lim2Published,
+    lim2Error,
+  };
 }
 
 export async function loadActive2026File(): Promise<{ data: unknown; publishedAt: string | null }> {

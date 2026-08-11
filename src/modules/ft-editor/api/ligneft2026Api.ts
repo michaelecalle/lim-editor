@@ -42,9 +42,15 @@ export async function fetchLigneFt2026Current(): Promise<{
   }
 }
 
-export async function publishLigneFt2026Data(
-  data: unknown
-): Promise<{ publishedPath: string; archiveCreated: { name: string; path: string } | null; purgedArchives: string[] }> {
+export type Publish2026Diagnostic = {
+  publishedPath: string;
+  archiveCreated: { name: string; path: string } | null;
+  purgedArchives: string[];
+  lim2Published: boolean;
+  lim2Error: string | null;
+};
+
+export async function publishLigneFt2026Data(data: unknown): Promise<Publish2026Diagnostic> {
   const response = await fetch("/api/ligneft2026/publish", {
     method: "POST",
     headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -54,5 +60,5 @@ export async function publishLigneFt2026Data(
   if (!response.ok) {
     throw new Error(extractErrorMessage(payload, "Impossible de publier le normalisé 2026."));
   }
-  return (payload as { diagnostic: { publishedPath: string; archiveCreated: { name: string; path: string } | null; purgedArchives: string[] } }).diagnostic;
+  return (payload as { diagnostic: Publish2026Diagnostic }).diagnostic;
 }
