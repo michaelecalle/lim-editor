@@ -1660,6 +1660,36 @@ export default function Normalise2026Tab() {
     trainNumbers.length > 0 &&
     JSON.stringify(buildNormalized(), null, 2) !== (localStorage.getItem(NORMALIZED_LOCAL_KEY) ?? "");
 
+  // Garde-fou publication (11/08) : vérifie que le sens de circulation déclaré
+  // de chaque train correspond bien à l'ordre réel origine→destination dans les
+  // données ligne, ET que ces deux établissements existent tels quels. Découvert
+  // via le train 38510 (direction fausse) + 9711/9713/9715 (destination mal
+  // orthographiée) — les deux causes produisaient le même symptôme (repli
+  // silencieux sur toute la ligne, ou pire, ordre inversé). BLOQUANT à la
+  // publication : donnée de sécurité (positionnement GPS/fiche train), pas
+  // seulement un souci d'affichage.
+  const directionInconsistencies = trainNumbers.flatMap((num) => {
+    const t = trains[num];
+    const ver = ligneVersions[t.ligneVersionId];
+    if (!ver) return [];
+    const table = t.direction === "nordSud" ? ver.nordSud : ver.sudNord;
+    const startIdx = table.findIndex((p) => p.type !== "note" && p.etablissement === t.origine);
+    const endIdx = table.findIndex((p) => p.type !== "note" && p.etablissement === t.destination);
+    if (startIdx === -1 || endIdx === -1) {
+      return [
+        `Train ${num} : origine ou destination introuvable dans les données ligne (sens "${t.direction}") — ` +
+          `vérifie l'orthographe exacte (origine="${t.origine}", destination="${t.destination}").`,
+      ];
+    }
+    if (endIdx < startIdx) {
+      return [
+        `Train ${num} : sens de circulation probablement faux — origine="${t.origine}" apparaît après ` +
+          `destination="${t.destination}" dans le sens "${t.direction}" déclaré.`,
+      ];
+    }
+    return [];
+  });
+
   // ---- IMPORTATEUR : classeurs Excel → diffs → modale → application --------------
   const handleImportFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -1771,7 +1801,7 @@ export default function Normalise2026Tab() {
   };
 
   const handleConfirmPublish = async () => {
-    if (isPublishing) return;
+    if (isPublishing || directionInconsistencies.length > 0) return;
     setIsPublishing(true);
     setPublishError(null);
     try {
@@ -1952,10 +1982,17 @@ export default function Normalise2026Tab() {
                 immédiatement la version en cours). */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
               <div>
-                <div style={LABEL}>Sens de circulation</div>
-                <div style={{ ...INPUT, background: "#f3f4f6", display: "flex", alignItems: "center" }}>
-                  {train.direction === "nordSud" ? "Nord → Sud" : "Sud → Nord"}
+                <div style={LABEL} title="Doit correspondre à l'ordre réel des PK entre origine et destination — sinon la fiche train se construit sur toute la ligne ou à l'envers.">
+                  Sens de circulation
                 </div>
+                <select
+                  value={train.direction}
+                  onChange={(e) => updateField("direction", e.target.value === "nordSud" ? "nordSud" : "sudNord")}
+                  style={INPUT}
+                >
+                  <option value="sudNord">Sud → Nord</option>
+                  <option value="nordSud">Nord → Sud</option>
+                </select>
               </div>
               <div>
                 <div style={LABEL}>Version des données ligne</div>
@@ -2638,13 +2675,42 @@ export default function Normalise2026Tab() {
           >
             <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12 }}>Publier le normalisé 2026 ?</div>
             <div style={{ fontSize: 13.5, color: "#374151", lineHeight: 1.5, marginBottom: 10 }}>
-              Cette action va publier le document normalisé 2026 sur GitHub (repo lim-editor,
-              fichier séparé de l'ancien normalisé — les deux cohabitent pour l'instant).
-              L'ancien contenu sera archivé automatiquement avant écrasement.
+              Cette action va publier le document normalisé 2026 sur GitHub, vers DEUX repos :
+              lim-editor (fichier séparé de l'ancien normalisé — les deux cohabitent pour
+              l'instant ; ancien contenu archivé automatiquement avant écrasement) et LIM2
+              (fichier embarqué, déclenchera un déploiement de l'application LIM).
             </div>
             <div style={{ fontSize: 13.5, color: "#374151", lineHeight: 1.5, marginBottom: 18 }}>
-              Cette publication ne concerne QUE l'éditeur (pas encore LIM/LIM2).
+              Si la publication LIM2 échoue, celle de l'éditeur reste acquise — le message de
+              résultat précisera les deux statuts séparément.
             </div>
+            {directionInconsistencies.length > 0 ? (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "#92400e",
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: 8,
+                  padding: "10px 12px",
+                  marginBottom: 14,
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                  ⛔ Publication bloquée — incohérence(s) détectée(s) sur le sens de circulation :
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {directionInconsistencies.map((msg) => (
+                    <li key={msg}>{msg}</li>
+                  ))}
+                </ul>
+                <div style={{ marginTop: 6 }}>
+                  Corrige le champ « Sens de circulation » ou « Origine »/« Destination » du train
+                  concerné avant de publier — donnée utilisée pour la localisation GPS, pas
+                  seulement l'affichage.
+                </div>
+              </div>
+            ) : null}
             {publishError ? (
               <div
                 style={{
@@ -2681,8 +2747,8 @@ export default function Normalise2026Tab() {
               <button
                 type="button"
                 onClick={handleConfirmPublish}
-                disabled={isPublishing}
-                style={{ ...validerBtn(isPublishing), minWidth: 140 }}
+                disabled={isPublishing || directionInconsistencies.length > 0}
+                style={{ ...validerBtn(isPublishing || directionInconsistencies.length > 0), minWidth: 140 }}
               >
                 {isPublishing ? "Publication…" : "Confirmer"}
               </button>

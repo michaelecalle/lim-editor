@@ -95,10 +95,33 @@ export function buildFtRows2026(
 
   // Tronque la séquence entre origine et destination (notes comprises), comme
   // l'ancien pipeline — recherche par nom d'établissement, premier/dernier match.
+  // ⚠️ Repli JAMAIS silencieux (11/08) : un repli silencieux sur toute la ligne
+  // est ce qui a laissé passer inaperçu le train 38510 (direction fausse) et les
+  // trains 9711/9713/9715 (destination mal orthographiée) — cf. mémoire projet.
   const startIdx = allPoints.findIndex((p) => p.type !== "note" && p.etablissement === origine);
   const endIdxFromEnd = [...allPoints].reverse().findIndex((p) => p.type !== "note" && p.etablissement === destination);
   const endIdx = endIdxFromEnd === -1 ? -1 : allPoints.length - 1 - endIdxFromEnd;
-  const points = startIdx !== -1 && endIdx !== -1 && endIdx >= startIdx ? allPoints.slice(startIdx, endIdx + 1) : allPoints;
+
+  let points: LignePointLike[];
+  if (startIdx === -1 || endIdx === -1) {
+    console.warn(
+      `[buildFtRows2026] Origine ou destination introuvable dans les données ligne (sens "${direction}") — ` +
+        `origine="${origine}" (trouvée: ${startIdx !== -1}), destination="${destination}" (trouvée: ${endIdx !== -1}). ` +
+        `Repli sur la ligne ENTIÈRE (fiche train probablement trop longue) : vérifier l'orthographe exacte du ` +
+        `champ concerné pour ce train dans l'onglet Fiches Train.`
+    );
+    points = allPoints;
+  } else if (endIdx < startIdx) {
+    console.warn(
+      `[buildFtRows2026] Ordre incohérent pour ce train : origine="${origine}" apparaît APRÈS destination="${destination}" ` +
+        `dans le sens "${direction}" déclaré. Le sens de circulation de ce train est probablement faux (à corriger ` +
+        `dans l'onglet Fiches Train, champ « Sens de circulation »). Repli sur [min,max] : les bonnes stations, mais ` +
+        `possiblement dans l'ordre inverse de la marche réelle du train.`
+    );
+    points = allPoints.slice(Math.min(startIdx, endIdx), Math.max(startIdx, endIdx) + 1);
+  } else {
+    points = allPoints.slice(startIdx, endIdx + 1);
+  }
 
   const rawRows: Omit<
     PdfFtRow2026,
