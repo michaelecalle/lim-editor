@@ -1233,6 +1233,27 @@ export default function Normalise2026Tab() {
     setGeneratedJson(null);
   };
 
+  // Suppression d'un train (demande de longue date, reprise 12/08 — cas concret :
+  // train 38579 présent dans le normalisé mais absent du livret FT réel, donc
+  // sélectionnable dans LIM sans avoir de fiche). Confirmation native : action
+  // destructrice, pas de corbeille — mais reste locale tant que non republiée.
+  const deleteCurrentTrain = () => {
+    if (!currentNumero) return;
+    const confirmed = window.confirm(
+      `Supprimer définitivement le train ${currentNumero} du normalisé ?\n\n` +
+        `Cette suppression ne prendra effet en ligne qu'après publication.`
+    );
+    if (!confirmed) return;
+    const toDelete = currentNumero;
+    setTrains((prev) => {
+      const next = { ...prev };
+      delete next[toDelete];
+      return next;
+    });
+    setCurrentNumero(null);
+    setGeneratedJson(null);
+  };
+
   const updateField = (field: keyof TrainDraft, value: string) => {
     if (!currentNumero) return;
     setTrains((prev) => {
@@ -2011,7 +2032,27 @@ export default function Normalise2026Tab() {
       {/* ================= CADRE 2 — Données train ================= */}
       {train ? (
         <div style={CARD}>
-          <div style={CARD_TITLE}>Données train</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={CARD_TITLE}>Données train</div>
+            <button
+              type="button"
+              onClick={deleteCurrentTrain}
+              title="Supprimer ce train du normalisé (effectif après publication)"
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid #fca5a5",
+                background: "#fef2f2",
+                color: "#b91c1c",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+                height: "fit-content",
+              }}
+            >
+              🗑 Supprimer ce train
+            </button>
+          </div>
           <div style={{ maxWidth: 720 }}>
             <div style={{ marginBottom: 18 }}>
               <div style={LABEL}>Train (n° espagnol — identifiant, non éditable)</div>
