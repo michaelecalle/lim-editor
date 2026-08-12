@@ -9,6 +9,7 @@
 // analyse pixel), pas estimées à l'oeil. Étendu pour couvrir ETCS (barre +
 // réaffichage de groupe par page), absent de l'ancien pipeline.
 import type { PdfFtRow2026 } from "./buildFtRows2026";
+import type { PdfLtvRow } from "../../components/pdf/LimPdf";
 
 // ── Constantes de hauteur (en points) ────────────────────────────────────────
 // Mesurées sur un rendu réel (train 9705, scale 4, détection des bordures
@@ -29,8 +30,37 @@ const FT_HEADER_2026_H = 20; // en-tête FT à une seule ligne (vs 28 dans l'anc
 const FT_ROW_H = 16; // dataRow / intermediateRow minHeight (PdfBlocFt2026.tsx)
 const FT_NOTE_LINE_H = 7; // hauteur par ligne de note rouge OU note LTV (fontSize 6, italique)
 
-export function computePage1Available(ltvRowCount: number): number {
-  const ltvBlocH = BLOC_LTV_BASE_H + Math.max(ltvRowCount, 1) * BLOC_LTV_ROW_H;
+// Colonne "(CÓD.) Trayecto / Estación" du bloc LTV (`PdfBlocLtv.tsx::COL.section`,
+// 118pt) — SEULE colonne à largeur fixe et texte non protégé contre le retour à la
+// ligne (les autres colonnes texte-libre, motivo/observaciones, sont auto-élargies
+// à la valeur la plus longue). Avec de vraies LTV (trajets combinés du type
+// "LIMITE ADIF - LFPSA- / FIGUERES-VILAFANT"), cette colonne passe fréquemment sur
+// 2 lignes — jamais couvert tant que testé avec des tableaux LTV vides (cf. mémoire
+// projet). Mesuré empiriquement (12/08) sur un rendu réel du bloc avec les 10
+// vraies LTV du train 9714 (`PdfBlocLtv.tsx` isolé, positions des lignes de texte
+// extraites via pdfjs-dist) : une ligne de 30 caractères tient sur 1 ligne, une de
+// 41 caractères passe à 2 — chaque ligne supplémentaire ajoute ≈5.5pt à la hauteur
+// réelle de la ligne (mesuré : 14.4-15pt/ligne simple vs 19.9-20.5pt/ligne à 2
+// niveaux). Repli conservateur si aucune ligne ne dépasse (comportement identique
+// à avant ce correctif). Seuil réel confirmé sur les 10 lignes du train 9714 :
+// 30 caractères tiennent sur 1 ligne, 32 passent à 2 (soit ≈3.65pt/caractère,
+// PAS le `CHAR_W = 3.6` conservateur utilisé par `PdfBlocLtv.tsx::autoWidth` pour
+// les colonnes auto-élargies — cohérent avec l'observation que même CES colonnes
+// (ex. "motivo") ont débordé sur 2 lignes lors de la même mesure, donc `CHAR_W`
+// legèrement optimiste là aussi — non corrigé ici, seule la pagination compte.
+const LTV_SECTION_COL_W = 118;
+const LTV_SECTION_USABLE_W = LTV_SECTION_COL_W - 4; // padding 2pt de chaque côté
+const LTV_SECTION_CHAR_W = 3.65; // mesuré empiriquement, cf. commentaire ci-dessus
+const LTV_ROW_EXTRA_LINE_H = 5.5; // mesuré empiriquement, cf. commentaire ci-dessus
+
+function estimateLtvRowH(row: PdfLtvRow): number {
+  const sectionLines = Math.max(1, Math.ceil((row.section.length * LTV_SECTION_CHAR_W) / LTV_SECTION_USABLE_W));
+  return BLOC_LTV_ROW_H + (sectionLines - 1) * LTV_ROW_EXTRA_LINE_H;
+}
+
+export function computePage1Available(ltvRows: PdfLtvRow[]): number {
+  const ltvRowsH = ltvRows.length === 0 ? BLOC_LTV_ROW_H : ltvRows.reduce((sum, r) => sum + estimateLtvRowH(r), 0);
+  const ltvBlocH = BLOC_LTV_BASE_H + ltvRowsH;
   return USABLE_H - BLOC_INFO_2026_H - BLOC_GAP - ltvBlocH - BLOC_GAP - FT_HEADER_2026_H;
 }
 
@@ -281,8 +311,8 @@ function fixSegmentGroupText(rows: PdfFtRow2026[]): PdfFtRow2026[] {
 
 // ── Point d'entrée ────────────────────────────────────────────────────────────
 
-export function paginateFtRows2026(rows: PdfFtRow2026[], ltvRowCount: number): PdfFtRow2026[][] {
-  const page1Available = computePage1Available(ltvRowCount);
+export function paginateFtRows2026(rows: PdfFtRow2026[], ltvRows: PdfLtvRow[]): PdfFtRow2026[][] {
+  const page1Available = computePage1Available(ltvRows);
   const pageNAvailable = computePageNAvailable();
   return fixSegmentBars(splitFtRows(rows, page1Available, pageNAvailable)).map(fixSegmentGroupText);
 }

@@ -15,6 +15,7 @@ import {
   readLigneVersionsLocal,
   cloneDefaultLigneVersion,
   DEFAULT_LIGNE_VERSION_ID,
+  CURRENT_TRAIN_KEY,
 } from "./Normalise2026Tab";
 import { fetchLtvRows2026 } from "../../modules/pdf2026/buildLtvRows2026";
 import { buildTrainPdfDocument2026 } from "../../modules/pdf2026/buildTrainPdfDocument2026";
@@ -32,7 +33,12 @@ export default function Export2026Preview() {
   const [ligneVersions] = useState(() => readLigneVersionsLocal());
   const trainNumbers = Object.keys(trains).sort();
 
-  const [selected, setSelected] = useState("");
+  // Présélection : même train que celui ouvert dans l'onglet Fiches Train,
+  // comme le faisait l'ancien panneau d'export (demande utilisateur, 12/08).
+  const [selected, setSelected] = useState(() => {
+    const current = localStorage.getItem(CURRENT_TRAIN_KEY) ?? "";
+    return current in trains ? current : "";
+  });
   const [ltvRows, setLtvRows] = useState<PdfLtvRow[]>([]);
   const [ltvPublishedAt, setLtvPublishedAt] = useState<string | null>(null);
 

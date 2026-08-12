@@ -181,8 +181,16 @@ export function buildFtRows2026(
   const dataRowCount = dataRowsOnly.length;
 
   // --- Numéro de réseau : page 1 affiche le numéro du réseau du 1er point
-  // parcouru ; la ligne où le réseau change (au plus une fois, cf. commentaire
-  // de `reseauDePoint`) porte l'autre numéro.
+  // parcouru ; le numéro de l'AUTRE réseau apparaît sur le point physique de
+  // frontière lui-même ("Limite ADIF-LFPSA", seul point de la ligne qui porte
+  // à la fois un `pkAdif` ET un `pkLfp") — PAS sur "le 1er point qui diffère
+  // du précédent" : cette 1re version (12/08) plaçait à tort le numéro sur la
+  // ligne SUIVANTE ("Tunnel du Perthus - tête sud") dans le sens Espagne→France,
+  // parce que "Limite ADIF-LFPSA" y est encore côté ADIF (dernier point ADIF de
+  // ce sens) — correct seulement par coïncidence dans l'autre sens (France→Espagne,
+  // où "Limite ADIF-LFPSA" est le 1er point ADIF). Signalé par l'utilisateur,
+  // corrigé en ancrant directement sur le point-frontière physique, quel que
+  // soit le sens de parcours.
   const dataPointsOnly = points.filter((p) => p.type !== "note");
   const numeroPage1 =
     dataPointsOnly.length > 0
@@ -190,12 +198,11 @@ export function buildFtRows2026(
       : numeroFrance || numeroEspagne;
 
   const crossingNumeroMap = new Map<string, string>();
-  for (let i = 1; i < dataPointsOnly.length; i++) {
-    const prevReseau = reseauDePoint(dataPointsOnly[i - 1]);
-    const curReseau = reseauDePoint(dataPointsOnly[i]);
-    if (curReseau !== prevReseau) {
-      crossingNumeroMap.set(dataRowsOnly[i].id, numeroPourReseau(curReseau, numeroEspagne, numeroFrance));
-    }
+  const frontiereIdx = dataPointsOnly.findIndex((p) => p.pkAdif !== "" && p.pkLfp !== "");
+  if (frontiereIdx !== -1) {
+    const reseauDepart = reseauDePoint(dataPointsOnly[0]);
+    const autreReseau: "ADIF" | "AUTRE" = reseauDepart === "ADIF" ? "AUTRE" : "ADIF";
+    crossingNumeroMap.set(dataRowsOnly[frontiereIdx].id, numeroPourReseau(autreReseau, numeroEspagne, numeroFrance));
   }
 
   // --- Groupes de zone (Bloc/Radio/Rampe) : barre au 1er changement + texte au

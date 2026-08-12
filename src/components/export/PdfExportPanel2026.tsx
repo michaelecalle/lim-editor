@@ -20,6 +20,7 @@ import {
   readLigneVersionsLocal,
   cloneDefaultLigneVersion,
   DEFAULT_LIGNE_VERSION_ID,
+  CURRENT_TRAIN_KEY,
 } from "../tabs/Normalise2026Tab";
 import { fetchLtvRows2026 } from "../../modules/pdf2026/buildLtvRows2026";
 import { buildTrainPdfDocument2026 } from "../../modules/pdf2026/buildTrainPdfDocument2026";
@@ -41,7 +42,12 @@ export default function PdfExportPanel2026() {
   const [trains] = useState(() => readNormalizedLocal());
   const trainNumbers = Object.keys(trains).sort();
 
-  const [selectedTrains, setSelectedTrains] = useState<Set<string>>(new Set());
+  // Présélection : même train que celui ouvert dans l'onglet Fiches Train,
+  // comme le faisait l'ancien panneau d'export (demande utilisateur, 12/08).
+  const [selectedTrains, setSelectedTrains] = useState<Set<string>>(() => {
+    const current = localStorage.getItem(CURRENT_TRAIN_KEY) ?? "";
+    return current in trains ? new Set([current]) : new Set();
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [pendingAction, setPendingAction] = useState<"pdf" | "zip" | null>(null);
 

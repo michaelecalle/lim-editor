@@ -40,7 +40,7 @@ export function buildTrainPdfDocument2026(
     train.numeroFrance
   );
   const props = buildPdfInfoPropsForTrain2026(train, ligneVersion, numeroPage1);
-  const ftSegments = paginateFtRows2026(ftRows, filteredLtvRows.length);
+  const ftSegments = paginateFtRows2026(ftRows, filteredLtvRows);
 
   const document = (
     <Document>

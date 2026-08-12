@@ -355,6 +355,15 @@ const NORMALIZED_LOCAL_KEY = "normalise2026:current";
 // — pré-refusées et repliées aux imports suivants au lieu d'être re-proposées.
 const REFUS_MEMORISES_KEY = "normalise2026:refusMemorises";
 
+// Train actuellement ouvert ici — lu par `Export2026Preview.tsx`/`PdfExportPanel2026.tsx`
+// (à leur montage, qui a lieu à chaque bascule sur l'onglet Export puisqu'ils ne
+// sont rendus QUE si `activeTab === "EXPORT"`) pour présélectionner automatiquement
+// le même train, comme le faisait l'ancien panneau via une prop partagée
+// (`FTEditorPage.tsx::selectedTrainNumber` → `exportTrainNumber`) — ces deux
+// composants étant volontairement autonomes (pas de props injectées, cf. mémoire
+// projet), on utilise le même mécanisme de persistance que les données elles-mêmes.
+export const CURRENT_TRAIN_KEY = "normalise2026:currentTrain";
+
 function readRefusMemorises(): Set<string> {
   try {
     const raw = localStorage.getItem(REFUS_MEMORISES_KEY);
@@ -1111,6 +1120,12 @@ export default function Normalise2026Tab() {
   // incrément (quand une V2 sera importée/créée).
   const [currentVersionId] = useState<string>(DEFAULT_LIGNE_VERSION_ID);
   const [currentNumero, setCurrentNumero] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentNumero) localStorage.setItem(CURRENT_TRAIN_KEY, currentNumero);
+    else localStorage.removeItem(CURRENT_TRAIN_KEY);
+  }, [currentNumero]);
+
   // Sens affiché dans le cadre « Données ligne » (consultation) — INDÉPENDANT du
   // sens du train sélectionné (demande utilisateur, 09/08) : ce cadre n'affichait
   // jusqu'ici que le sens sud→nord, sans moyen de voir l'autre sens.
