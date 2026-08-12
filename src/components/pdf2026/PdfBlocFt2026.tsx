@@ -302,11 +302,14 @@ export default function PdfBlocFt2026({ rows }: Props) {
               </Text>
             </View>
 
-            {/* Établissements */}
-            <View style={[s.cell, { flex: 1, backgroundColor: hlBg }]}>
+            {/* Établissements — le numéro de l'AUTRE réseau (colonne alignée à
+                droite) apparaît sur la ligne exacte où le train change de
+                réseau (cf. `crossingNumero`, `buildFtRows2026.ts`) */}
+            <View style={[s.cell, { flex: 1, backgroundColor: hlBg, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
               <TextNL
                 numberOfLines={1}
                 style={{
+                  flexShrink: 1,
                   fontSize: 9,
                   fontFamily: hl ? "Helvetica-Bold" : "Helvetica",
                   color: hasStation ? "#111827" : "#6b7280",
@@ -314,6 +317,11 @@ export default function PdfBlocFt2026({ rows }: Props) {
               >
                 {hasStation && hl ? row.etablissement + dotLeader(row.etablissement) : row.etablissement}
               </TextNL>
+              {row.crossingNumero !== "" && (
+                <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: BLEU_MARINE, marginLeft: 6 }}>
+                  {row.crossingNumero}
+                </Text>
+              )}
             </View>
 
             {/* Arr / Pass / Dép */}

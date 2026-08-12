@@ -20,7 +20,6 @@ import {
   readLigneVersionsLocal,
   cloneDefaultLigneVersion,
   DEFAULT_LIGNE_VERSION_ID,
-  type TrainDraft,
 } from "../tabs/Normalise2026Tab";
 import { fetchLtvRows2026 } from "../../modules/pdf2026/buildLtvRows2026";
 import { buildTrainPdfDocument2026 } from "../../modules/pdf2026/buildTrainPdfDocument2026";
@@ -37,12 +36,6 @@ const BTN_BASE: React.CSSProperties = {
 
 const BTN_ACTIVE: React.CSSProperties = { ...BTN_BASE, background: "#111827", color: "#ffffff", border: "1px solid #111827" };
 const BTN_DISABLED: React.CSSProperties = { ...BTN_BASE, background: "#f3f4f6", color: "#9ca3af", cursor: "not-allowed" };
-
-function numeroAffiche(train: TrainDraft): string {
-  return train.direction === "nordSud"
-    ? train.numeroFrance || train.numeroEspagne
-    : train.numeroEspagne || train.numeroFrance;
-}
 
 export default function PdfExportPanel2026() {
   const [trains] = useState(() => readNormalizedLocal());
@@ -94,16 +87,16 @@ export default function PdfExportPanel2026() {
 
       if (action === "pdf") {
         const train = trains[selectedList[0]];
-        const doc = buildTrainPdfDocument2026(train, currentLigneVersion, train.horaires, ltvRows, ltvPublishedAt);
-        const blob = await pdf(doc).toBlob();
-        triggerDownload(blob, `LIM2026_${numeroAffiche(train)}.pdf`);
+        const { document, numeroPage1 } = buildTrainPdfDocument2026(train, currentLigneVersion, train.horaires, ltvRows, ltvPublishedAt);
+        const blob = await pdf(document).toBlob();
+        triggerDownload(blob, `LIM2026_${numeroPage1}.pdf`);
       } else {
         const zip = new JSZip();
         for (const num of selectedList) {
           const train = trains[num];
-          const doc = buildTrainPdfDocument2026(train, currentLigneVersion, train.horaires, ltvRows, ltvPublishedAt);
-          const blob = await pdf(doc).toBlob();
-          zip.file(`LIM2026_${numeroAffiche(train)}.pdf`, blob);
+          const { document, numeroPage1 } = buildTrainPdfDocument2026(train, currentLigneVersion, train.horaires, ltvRows, ltvPublishedAt);
+          const blob = await pdf(document).toBlob();
+          zip.file(`LIM2026_${numeroPage1}.pdf`, blob);
         }
         const zipBlob = await zip.generateAsync({ type: "blob" });
         triggerDownload(zipBlob, "LIM2026_export.zip");
@@ -163,7 +156,7 @@ export default function PdfExportPanel2026() {
                 onChange={() => toggleTrain(num)}
                 style={{ cursor: "pointer" }}
               />
-              {numeroAffiche(trains[num])}
+              Train {num}
             </label>
           ))
         )}

@@ -139,6 +139,7 @@ function createContextRow(prevRows: PdfFtRow2026[], firstNewRow: PdfFtRow2026, s
     etcsTextBelow: "",
     highlight: firstNewRow.highlight,
     csvHighlight: firstNewRow.csvHighlight !== "none" ? "full" : "none",
+    crossingNumero: "",
   };
 }
 

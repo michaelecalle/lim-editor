@@ -30,22 +30,18 @@ function formatDateFr(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
-// Numéro affiché en tête de fiche : le document montre le numéro du réseau où le
-// train PREND SON DÉPART (espagnol pour un sud-nord parti d'Espagne, français pour
-// un nord-sud parti de France — confirmé par l'utilisateur en observant les fiches
-// sources : la 1re page d'un train nord-sud porte son numéro français).
-function numeroAffiche(train: Train2026Input): string {
-  return train.direction === "nordSud"
-    ? train.numeroFrance || train.numeroEspagne
-    : train.numeroEspagne || train.numeroFrance;
-}
-
 export function buildPdfInfoPropsForTrain2026(
   train: Train2026Input,
-  ligneVersion: LigneVersion2026Input
+  ligneVersion: LigneVersion2026Input,
+  // Numéro affiché en tête de fiche : celui du réseau où le train se trouve au
+  // 1er point de la page 1 (pas déduit de la direction globale — un train
+  // peut circuler entièrement d'un côté de la frontière quel que soit son sens
+  // de PK) — calculé par `buildFtRows2026` (`numeroPage1`), qui a accès au
+  // détail des points parcourus, cf. mémoire projet (12/08).
+  numero: string
 ): PdfBlocInfo2026Props {
   return {
-    numero: numeroAffiche(train),
+    numero,
     materiel: train.materiel,
     categorieSNCF: train.categorieSNCF,
     categorieLFP: train.categorieLFP,

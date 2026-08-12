@@ -15,7 +15,6 @@ import {
   readLigneVersionsLocal,
   cloneDefaultLigneVersion,
   DEFAULT_LIGNE_VERSION_ID,
-  type TrainDraft,
 } from "./Normalise2026Tab";
 import { fetchLtvRows2026 } from "../../modules/pdf2026/buildLtvRows2026";
 import { buildTrainPdfDocument2026 } from "../../modules/pdf2026/buildTrainPdfDocument2026";
@@ -27,12 +26,6 @@ const SELECT: React.CSSProperties = {
   fontSize: 14,
   minWidth: 220,
 };
-
-function numeroAffiche(train: TrainDraft): string {
-  return train.direction === "nordSud"
-    ? train.numeroFrance || train.numeroEspagne
-    : train.numeroEspagne || train.numeroFrance;
-}
 
 export default function Export2026Preview() {
   const [trains] = useState(() => readNormalizedLocal());
@@ -62,7 +55,7 @@ export default function Export2026Preview() {
           <option value="">— sélectionner un train —</option>
           {trainNumbers.map((num) => (
             <option key={num} value={num}>
-              {numeroAffiche(trains[num])}
+              Train {num}
             </option>
           ))}
         </select>
@@ -70,7 +63,7 @@ export default function Export2026Preview() {
 
       {train ? (
         <PDFViewer style={{ width: "100%", height: "75vh", border: "1px solid #d1d5db", borderRadius: 8 }}>
-          {buildTrainPdfDocument2026(train, currentLigneVersion, train.horaires, ltvRows, ltvPublishedAt)}
+          {buildTrainPdfDocument2026(train, currentLigneVersion, train.horaires, ltvRows, ltvPublishedAt).document}
         </PDFViewer>
       ) : (
         <div style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>Sélectionnez un train pour afficher l'aperçu.</div>

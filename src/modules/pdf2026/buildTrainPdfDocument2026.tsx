@@ -28,19 +28,21 @@ export function buildTrainPdfDocument2026(
   horaires: Record<string, { arrivee: string; passage: string; depart: string }>,
   ltvRows: PdfLtvRow[],
   ltvPublishedAt: string | null
-) {
-  const props = buildPdfInfoPropsForTrain2026(train, ligneVersion);
-  const { rows: ftRows, filteredLtvRows } = buildFtRows2026(
+): { document: JSX.Element; numeroPage1: string } {
+  const { rows: ftRows, filteredLtvRows, numeroPage1 } = buildFtRows2026(
     ligneVersion[train.direction],
     train.direction,
     train.origine,
     train.destination,
     horaires,
-    ltvRows
+    ltvRows,
+    train.numeroEspagne,
+    train.numeroFrance
   );
+  const props = buildPdfInfoPropsForTrain2026(train, ligneVersion, numeroPage1);
   const ftSegments = paginateFtRows2026(ftRows, filteredLtvRows.length);
 
-  return (
+  const document = (
     <Document>
       <Page size="A4" style={styles.page}>
         <PdfBlocInfo2026 {...props} />
@@ -54,4 +56,6 @@ export function buildTrainPdfDocument2026(
       ))}
     </Document>
   );
+
+  return { document, numeroPage1 };
 }

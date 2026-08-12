@@ -68,6 +68,7 @@ export type PdfFtRow2026 = {
   etcsTextBelow: string;
   highlight: boolean;
   csvHighlight: "none" | "lower" | "full" | "upper";
+  crossingNumero: string;
 };
 
 // PK empilés (transition réseau) — même principe que `kmValues()` de
@@ -83,14 +84,33 @@ function kmDisplay(p: LignePointLike, direction: "sudNord" | "nordSud"): string 
     .join("\n");
 }
 
+// Numéro affiché = celui du réseau où se trouve le point (ADIF = espagnol,
+// sinon [SNCF/LFP/RAC, tous du côté français de la frontière] = français) —
+// PAS de la direction globale du train (12/08, corrige le cas d'un train
+// circulant entièrement en Espagne mais classé "nordSud" par convention de
+// sens de PK, ex. 38510 BARCELONA SANTS→CAN TUNIS-AV). Confirmé sur le
+// livret FT réel (LIVRET FT OUIGO.pdf, p.10-11) : l'en-tête de chaque page
+// porte le numéro du réseau où ELLE commence, et le numéro de l'autre réseau
+// est inséré sur la ligne exacte où le train change de réseau (ligne
+// "Limite ADIF-LFPSA", seul point de transition possible sur cette ligne).
+function reseauDePoint(p: LignePointLike): "ADIF" | "AUTRE" {
+  return p.pkAdif !== "" ? "ADIF" : "AUTRE";
+}
+
+function numeroPourReseau(reseau: "ADIF" | "AUTRE", numeroEspagne: string, numeroFrance: string): string {
+  return reseau === "ADIF" ? numeroEspagne || numeroFrance : numeroFrance || numeroEspagne;
+}
+
 export function buildFtRows2026(
   allPoints: LignePointLike[],
   direction: "sudNord" | "nordSud",
   origine: string,
   destination: string,
   horaires: Record<string, { arrivee: string; passage: string; depart: string }>,
-  ltvRows: PdfLtvRow[] = []
-): { rows: PdfFtRow2026[]; filteredLtvRows: PdfLtvRow[] } {
+  ltvRows: PdfLtvRow[] = [],
+  numeroEspagne = "",
+  numeroFrance = ""
+): { rows: PdfFtRow2026[]; filteredLtvRows: PdfLtvRow[]; numeroPage1: string } {
   const identityKey = (p: LignePointLike) => `${p.pkAdif}|${p.pkLfp}|${p.pkRac}|${p.pkRfn}`;
 
   // Tronque la séquence entre origine et destination (notes comprises), comme
@@ -130,7 +150,7 @@ export function buildFtRows2026(
     | "showRampeBar" | "showRampeText" | "rampeTextBelow"
     | "showVBar" | "showVmaxText" | "vmaxDisplayValue" | "vmaxTextBelow"
     | "showEtcsBar" | "showEtcsText" | "etcsTextBelow"
-    | "highlight" | "csvHighlight"
+    | "highlight" | "csvHighlight" | "crossingNumero"
   >[] = points.map((p, i) => {
     if (p.type === "note") {
       return {
@@ -159,6 +179,24 @@ export function buildFtRows2026(
 
   const dataRowsOnly = rawRows.filter((r) => r.type === "data");
   const dataRowCount = dataRowsOnly.length;
+
+  // --- Numéro de réseau : page 1 affiche le numéro du réseau du 1er point
+  // parcouru ; la ligne où le réseau change (au plus une fois, cf. commentaire
+  // de `reseauDePoint`) porte l'autre numéro.
+  const dataPointsOnly = points.filter((p) => p.type !== "note");
+  const numeroPage1 =
+    dataPointsOnly.length > 0
+      ? numeroPourReseau(reseauDePoint(dataPointsOnly[0]), numeroEspagne, numeroFrance)
+      : numeroFrance || numeroEspagne;
+
+  const crossingNumeroMap = new Map<string, string>();
+  for (let i = 1; i < dataPointsOnly.length; i++) {
+    const prevReseau = reseauDePoint(dataPointsOnly[i - 1]);
+    const curReseau = reseauDePoint(dataPointsOnly[i]);
+    if (curReseau !== prevReseau) {
+      crossingNumeroMap.set(dataRowsOnly[i].id, numeroPourReseau(curReseau, numeroEspagne, numeroFrance));
+    }
+  }
 
   // --- Groupes de zone (Bloc/Radio/Rampe) : barre au 1er changement + texte au
   // milieu du run (ou reporté sur la ligne intermédiaire suivante si run de 1 seul
@@ -393,6 +431,7 @@ export function buildFtRows2026(
       highlight,
       csvHighlight: (csvHighlightMap.get(row.id) ?? "none") as "none" | "lower" | "full" | "upper",
       ltvNote: ltvNoteMap.get(row.id)?.join("\n") ?? "",
+      crossingNumero: crossingNumeroMap.get(row.id) ?? "",
     };
   });
 
@@ -401,5 +440,5 @@ export function buildFtRows2026(
   // train, contrairement à l'ancien pipeline (`buildPdfPropsForTrain.ts`) qui
   // filtrait déjà par recouvrement PK — écart non voulu, corrigé en réutilisant
   // le même `filteredLtv` que les notes LTV insérées dans le tableau FT.
-  return { rows: finalRows, filteredLtvRows: filteredLtv };
+  return { rows: finalRows, filteredLtvRows: filteredLtv, numeroPage1 };
 }
