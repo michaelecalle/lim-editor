@@ -161,6 +161,34 @@ async function extractKmLabelShapes(zip: JSZip, sheetName: string): Promise<Map<
   return out;
 }
 
+// Note en forme flottante : certaines notes ne sont PAS des valeurs de cellule
+// mais des zones de texte dessinées par-dessus le tableau (cas confirmé : la
+// note « 60km/h ... KM 619.500 al 619.933 » de CT→BCW, invisible en lecture de
+// cellule alors que visible à l'écran — bug signalé 12/08). Signature : couleur
+// de texte bordeaux 9B0C36 (même couleur que NOTE_FONT_ARGB pour les notes en
+// cellule), et PAS le remplissage orange FFC000 des zones CSV. Une note peut
+// être scindée en plusieurs formes adjacentes (titre + détail « KM x al y » sur
+// des ancrages séparés, comme les notes multi-lignes en cellule) — fusionnées à
+// la même passe que les notes de cellule (Passe 7), pas ici.
+async function extractNoteShapes(
+  zip: JSZip,
+  sheetName: string
+): Promise<Array<{ row: number; texte: string; surligne: boolean }>> {
+  const drawingXml = await loadDrawingXml(zip, sheetName);
+  if (!drawingXml) return [];
+  return shapeAnchors(drawingXml)
+    .filter((a) => a.text.trim() !== "" && !a.raw.includes("FFC000") && /9B0C36/i.test(a.raw))
+    .map((a) => ({
+      row: a.fromRow,
+      texte: a.text.trim(),
+      // Fond pêche (accent2 éclairci) = surligné, même signal que isSurligneCell
+      // pour les notes en cellule ; pas d'exemple connu de note flottante SANS
+      // ce fond à ce jour — <a:noFill/> (fragment "détail" d'une note scindée)
+      // hérite quand même surligne=true via la fusion Passe 7 (OU logique).
+      surligne: /accent2/i.test(a.raw),
+    }));
+}
+
 type KmField = "pkAdif" | "pkLfp" | "pkRac" | "pkRfn";
 
 // Plages numériques de PK par réseau, propres à la ligne Barcelona-Perpignan.
@@ -244,6 +272,7 @@ export async function parseLigneSheet(
   const sheet = classeur.workbook.getWorksheet(sheetName);
   if (!sheet) throw new Error(`Feuille "${sheetName}" introuvable dans le classeur.`);
   const kmLabelShapes = await extractKmLabelShapes(classeur.zip, sheetName);
+  const noteShapes = await extractNoteShapes(classeur.zip, sheetName);
 
   // ---- Passe 1 : balayage des lignes -> événements bruts --------------------------
   type Scan = {
@@ -552,8 +581,13 @@ export async function parseLigneSheet(
   // ---- Passe 7 : notes — fusion multi-lignes puis intercalage kilométrique -------
   // Deux notes sur des lignes CONSÉCUTIVES = une seule note du document imprimée sur
   // deux lignes (ex. 38510 : "60km/h…" puis "KM619.933 al 619.500") → fusion « — ».
+  // Notes de cellule ET notes en forme flottante fusionnées dans le MÊME passage
+  // (triées par ligne) : une note scindée peut avoir un fragment de chaque sorte
+  // (bug 12/08 : le titre ET le détail PK de cette note précise sont tous deux des
+  // formes flottantes, mais rien n'empêche un futur cas mixte).
+  const allNoteEvents = [...noteEvents, ...noteShapes].sort((a, b) => a.row - b.row);
   const mergedNotes: Array<{ row: number; texte: string; lastRaw: string; surligne: boolean }> = [];
-  for (const n of noteEvents) {
+  for (const n of allNoteEvents) {
     const prev = mergedNotes[mergedNotes.length - 1];
     if (prev && n.row - prev.row <= 1) {
       // Cellule étalée sur plusieurs lignes : le MÊME texte se répète → une seule

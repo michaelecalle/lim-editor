@@ -1,4 +1,4 @@
-import { githubGetFileSha, githubPutBinaryFile } from "../../src/lib/ligneft/github.js";
+import { githubGetFileSha, githubPutBinaryFile, githubPutFile } from "../../src/lib/ligneft/github.js";
 import { MANAGED_DOCS } from "../../src/lib/documents.js";
 import {
   LigneFtConfigurationError,
@@ -15,12 +15,14 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-// POST /api/documents/publish  { doc: string, fileBase64: string }
-// Écrit (ou écrase) le PDF dans lim-logs sous le nom CANONIQUE du document.
+// POST /api/documents/publish  { doc: string, fileBase64: string, pageIndex?: Record<string, number> }
+// Écrit (ou écrase) le PDF dans lim-logs sous le nom CANONIQUE du document, et
+// si le document en a un (cfg.pageIndexPath) et qu'il est fourni, l'index
+// « train → page » à côté (livret FT, 12/08).
 export async function POST(request: Request): Promise<Response> {
-  let body: { doc?: string; fileBase64?: string };
+  let body: { doc?: string; fileBase64?: string; pageIndex?: Record<string, number> };
   try {
-    body = (await request.json()) as { doc?: string; fileBase64?: string };
+    body = (await request.json()) as { doc?: string; fileBase64?: string; pageIndex?: Record<string, number> };
   } catch {
     return jsonResponse(
       { ok: false, error: { code: "INVALID_REQUEST", message: "Corps JSON invalide" } },
@@ -54,6 +56,20 @@ export async function POST(request: Request): Promise<Response> {
       sha ?? undefined,
       "logs"
     );
+
+    // Index page (optionnel, uniquement pour les documents qui en déclarent un
+    // et si le client en a effectivement fourni un — ex. livret FT).
+    if (cfg.pageIndexPath && body.pageIndex && Object.keys(body.pageIndex).length > 0) {
+      const indexSha = await githubGetFileSha(cfg.pageIndexPath, "logs");
+      await githubPutFile(
+        cfg.pageIndexPath,
+        `${JSON.stringify(body.pageIndex, null, 2)}\n`,
+        `Mise à jour index pages « ${doc} » via l'éditeur`,
+        indexSha ?? undefined,
+        "logs"
+      );
+    }
+
     return jsonResponse({ ok: true, path: result.path, sha: result.sha });
   } catch (error) {
     if (error instanceof LigneFtConfigurationError) {

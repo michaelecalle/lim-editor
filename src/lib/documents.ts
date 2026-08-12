@@ -12,6 +12,10 @@ export type ManagedDoc = {
   fallbackPath: string;
   // Repli : URL publique statique LIM2 (pour l'aperçu via redirection).
   fallbackUrl: string;
+  // Index optionnel « numéro de train → page » publié À CÔTÉ du PDF (lim-logs),
+  // pour les documents multi-trains où LIM doit sauter à la bonne page en mode
+  // secours plutôt que d'afficher tout le classeur (livret FT, 12/08).
+  pageIndexPath?: string;
 };
 
 export const MANAGED_DOCS: Record<string, ManagedDoc> = {
@@ -28,5 +32,13 @@ export const MANAGED_DOCS: Record<string, ManagedDoc> = {
     fallbackTarget: "lim2",
     fallbackPath: "public/guia-bsn.pdf",
     fallbackUrl: "https://lim2.vercel.app/guia-bsn.pdf",
+  },
+  "livret-ft": {
+    key: "livret-ft",
+    logsPath: "documents/livret-ft.pdf",
+    fallbackTarget: "lim2",
+    fallbackPath: "public/livret-ft.pdf",
+    fallbackUrl: "https://lim2.vercel.app/livret-ft.pdf",
+    pageIndexPath: "documents/livret-ft.pages.json",
   },
 };

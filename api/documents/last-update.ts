@@ -36,9 +36,15 @@ export async function GET(request: Request): Promise<Response> {
     } catch {
       date = null;
     }
-    // 2) Sinon, repli sur le fichier statique LIM2.
+    // 2) Sinon, repli sur le fichier statique LIM2 — si CE repli n'existe pas non
+    // plus (document tout neuf jamais bundlé statiquement, ex. livret FT), ne pas
+    // planter : date reste null (l'UI affiche "non disponible").
     if (!date) {
-      date = await githubGetLastCommitDate(cfg.fallbackPath, cfg.fallbackTarget);
+      try {
+        date = await githubGetLastCommitDate(cfg.fallbackPath, cfg.fallbackTarget);
+      } catch {
+        date = null;
+      }
     }
     return jsonResponse({ ok: true, date });
   } catch (error) {

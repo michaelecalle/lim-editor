@@ -5,6 +5,7 @@ import {
   type DragEvent,
   type ChangeEvent,
 } from "react";
+import { buildLivretPageIndex } from "../../lib/livretPageIndex";
 
 // ISO → "28 juin 2026 à 08h00"
 function formatFrDateTime(iso: string): string | null {
@@ -36,11 +37,16 @@ type DocSlot = {
   key: string;
   title: string;
   docKey?: string;
+  // Document multi-trains : à l'upload, calcule aussi l'index « train → page »
+  // publié à côté du PDF (livret FT, 12/08 — LIM sautera à la bonne page en
+  // mode secours au lieu d'afficher tout le classeur).
+  needsPageIndex?: boolean;
 };
 
 const DOC_SLOTS: DocSlot[] = [
   { key: "manuel", title: "Manuel utilisateur", docKey: "manuel" },
   { key: "guia-bsn", title: "Guia BSN", docKey: "guia-bsn" },
+  { key: "livret-ft", title: "Livret FT", docKey: "livret-ft", needsPageIndex: true },
   { key: "autre", title: "Autre document" },
 ];
 
@@ -104,18 +110,30 @@ function DocumentColumn({ slot }: { slot: DocSlot }) {
     setStatus("uploading");
     setStatusMsg("");
     try {
+      let pageIndex: Record<string, number> | undefined;
+      if (slot.needsPageIndex) {
+        setStatusMsg("Analyse des pages…");
+        pageIndex = await buildLivretPageIndex(file);
+        if (Object.keys(pageIndex).length === 0) {
+          throw new Error(
+            "Aucun numéro de train détecté dans le PDF — vérifie qu'il s'agit bien du livret complet."
+          );
+        }
+      }
       const fileBase64 = await fileToBase64(file);
       const res = await fetch("/api/documents/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ doc: slot.docKey, fileBase64 }),
+        body: JSON.stringify({ doc: slot.docKey, fileBase64, pageIndex }),
       });
       const j = await res.json();
       if (!res.ok || !j?.ok) {
         throw new Error(j?.error?.message ?? "Échec de la publication");
       }
       setStatus("success");
-      setStatusMsg("Document mis à jour.");
+      setStatusMsg(
+        pageIndex ? `Document mis à jour (${Object.keys(pageIndex).length} trains détectés).` : "Document mis à jour."
+      );
       setFile(null);
       setReloadKey((k) => k + 1); // recharge aperçu + date
     } catch (err) {
