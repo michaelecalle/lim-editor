@@ -12,7 +12,7 @@
 // dont il réutilise les fonctions de lecture) plutôt que de dépendre de props
 // injectées par `FTEditorPage.tsx` — les trains 2026 vivent dans ce stockage local,
 // complètement séparé du pipeline ancien format.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import JSZip from "jszip";
 import { pdf } from "@react-pdf/renderer";
 import {
@@ -21,6 +21,7 @@ import {
   cloneDefaultLigneVersion,
   DEFAULT_LIGNE_VERSION_ID,
   CURRENT_TRAIN_KEY,
+  EXPORT_SELECTED_TRAIN_EVENT,
 } from "../tabs/Normalise2026Tab";
 import { fetchLtvRows2026 } from "../../modules/pdf2026/buildLtvRows2026";
 import { buildTrainPdfDocument2026 } from "../../modules/pdf2026/buildTrainPdfDocument2026";
@@ -50,6 +51,19 @@ export default function PdfExportPanel2026() {
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [pendingAction, setPendingAction] = useState<"pdf" | "zip" | null>(null);
+
+  // Reste synchronisé avec le menu déroulant de l'aperçu (`Export2026Preview.tsx`)
+  // pendant la session Export — cf. commentaire de `EXPORT_SELECTED_TRAIN_EVENT`.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const num = (e as CustomEvent<string>).detail;
+      if (num && num in trains) {
+        setSelectedTrains((prev) => (prev.has(num) ? prev : new Set(prev).add(num)));
+      }
+    };
+    window.addEventListener(EXPORT_SELECTED_TRAIN_EVENT, handler);
+    return () => window.removeEventListener(EXPORT_SELECTED_TRAIN_EVENT, handler);
+  }, [trains]);
 
   const allSelected = trainNumbers.length > 0 && trainNumbers.every((t) => selectedTrains.has(t));
 

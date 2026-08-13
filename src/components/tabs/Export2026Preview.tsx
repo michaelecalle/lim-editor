@@ -16,6 +16,7 @@ import {
   cloneDefaultLigneVersion,
   DEFAULT_LIGNE_VERSION_ID,
   CURRENT_TRAIN_KEY,
+  EXPORT_SELECTED_TRAIN_EVENT,
 } from "./Normalise2026Tab";
 import { fetchLtvRows2026 } from "../../modules/pdf2026/buildLtvRows2026";
 import { buildTrainPdfDocument2026 } from "../../modules/pdf2026/buildTrainPdfDocument2026";
@@ -57,7 +58,19 @@ export default function Export2026Preview() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
         <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginRight: 8 }}>Train :</label>
-        <select value={selected} onChange={(e) => setSelected(e.target.value)} style={SELECT}>
+        <select
+          value={selected}
+          onChange={(e) => {
+            const value = e.target.value;
+            setSelected(value);
+            // Coche automatiquement ce train dans le panneau latéral (demande
+            // utilisateur, 12/08 — cf. commentaire de `EXPORT_SELECTED_TRAIN_EVENT`).
+            if (value !== "") {
+              window.dispatchEvent(new CustomEvent(EXPORT_SELECTED_TRAIN_EVENT, { detail: value }));
+            }
+          }}
+          style={SELECT}
+        >
           <option value="">— sélectionner un train —</option>
           {trainNumbers.map((num) => (
             <option key={num} value={num}>

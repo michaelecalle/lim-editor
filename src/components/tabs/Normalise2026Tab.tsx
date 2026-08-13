@@ -364,6 +364,18 @@ const REFUS_MEMORISES_KEY = "normalise2026:refusMemorises";
 // projet), on utilise le même mécanisme de persistance que les données elles-mêmes.
 export const CURRENT_TRAIN_KEY = "normalise2026:currentTrain";
 
+// Synchronisation en direct entre `Export2026Preview.tsx` (menu déroulant, une
+// seule sélection) et `PdfExportPanel2026.tsx` (cases à cocher, sélection multiple
+// pour le ZIP) — deux composants FRÈRES sous l'onglet Export, sans parent commun
+// où lever un state partagé sans casser leur autonomie. `CURRENT_TRAIN_KEY`
+// ci-dessus ne sert qu'à la présélection INITIALE (au montage, depuis Fiches
+// Train) ; CET événement sert à garder les deux synchronisés PENDANT la session
+// Export : choisir un train dans le menu déroulant coche automatiquement sa case
+// dans le panneau latéral (demande utilisateur, 12/08 — bug initial : la
+// présélection ne marchait qu'au moment de basculer depuis Fiches Train, pas
+// quand le train était choisi directement dans l'onglet Export lui-même).
+export const EXPORT_SELECTED_TRAIN_EVENT = "normalise2026:exportSelectedTrainChanged";
+
 function readRefusMemorises(): Set<string> {
   try {
     const raw = localStorage.getItem(REFUS_MEMORISES_KEY);
