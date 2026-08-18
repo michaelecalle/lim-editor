@@ -8,6 +8,7 @@ import { buildCandidateTrains, type CandidateTrain } from "./buildCandidateTrain
 import { diffLignePoints, type LigneDiff } from "./diffLigne";
 import { diffTrains, type CurrentTrain, type TrainDiff } from "./diffTrains";
 import { deriveTrainDirection, type LignePoint } from "../../components/tabs/Normalise2026Tab";
+import { repairKnownVmaxIssues } from "./repairKnownVmaxIssues";
 
 export type ImportResult = {
   ligneDiffs: LigneDiff[];
@@ -21,8 +22,13 @@ export async function runImport(
   currentLigne: { sudNord: LignePoint[]; nordSud: LignePoint[] },
   currentTrains: CurrentTrain[]
 ): Promise<ImportResult> {
+  // Correctifs Vmax connus (points-frontières mal positionnés dans le document
+  // source, cf. mémoire projet) appliqués de façon transparente AVANT tout
+  // parsing — l'utilisateur dépose le fichier tel quel, reçu du créateur.
+  const repairedBuffers = await Promise.all(buffers.map((b) => repairKnownVmaxIssues(b)));
+
   // Chaque classeur est ouvert UNE seule fois puis partagé entre les parseurs.
-  const classeurs = await Promise.all(buffers.map((b) => openClasseur(b)));
+  const classeurs = await Promise.all(repairedBuffers.map((b) => openClasseur(b)));
   const ligne = await buildCandidateLigne(classeurs);
   const candidates: CandidateTrain[] = [];
   for (const c of classeurs) candidates.push(...(await buildCandidateTrains(c)));
