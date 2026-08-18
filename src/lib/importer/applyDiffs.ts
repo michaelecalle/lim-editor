@@ -82,10 +82,19 @@ export function applyLigneActions(points: LignePoint[], actions: LigneApplyActio
           pkRac: "",
           pkRfn: "",
         };
-        // Position kilométrique approximative : après la note précédente, sinon en fin.
-        const notesSoFar = rows.filter((r) => r.type === "note");
-        const anchor = notesSoFar[a.noteIndex - 1];
-        const at = anchor ? rows.indexOf(anchor) + 1 : rows.length;
+        // Position kilométrique : ancrée sur le point voisin (`anchorPointKey`, avant
+        // ou après selon `anchorBefore`) quand résolue par le diff ; repli sur
+        // l'ancienne heuristique (après la note précédente, sinon en fin) sinon —
+        // ex. note sans aucun point nommé à proximité, cas rare.
+        const anchorPoint = a.anchorPointKey ? byKey.get(a.anchorPointKey) : undefined;
+        let at: number;
+        if (anchorPoint) {
+          at = rows.indexOf(anchorPoint) + (a.anchorBefore ? 0 : 1);
+        } else {
+          const notesSoFar = rows.filter((r) => r.type === "note");
+          const prevNote = notesSoFar[a.noteIndex - 1];
+          at = prevNote ? rows.indexOf(prevNote) + 1 : rows.length;
+        }
         rows.splice(at, 0, note);
         break;
       }

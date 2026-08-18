@@ -58,7 +58,15 @@ export type LigneApplyAction =
   | { kind: "remove-point"; pointKey: string }
   | { kind: "set-note-field"; noteIndex: number; field: "texte" | "position"; value: string }
   | { kind: "set-note-surligne"; noteIndex: number; value: boolean }
-  | { kind: "add-note"; noteIndex: number; note: { texte: string; position: "au-dessus" | "en-dessous"; surligne: boolean } }
+  | {
+      kind: "add-note";
+      noteIndex: number;
+      // Ancrage préféré (clé de point stable) ; `noteIndex` reste un repli pour les
+      // notes sans ancrage résolu (ex. tout début/fin de ligne sans point nommé).
+      anchorPointKey: string | null;
+      anchorBefore: boolean;
+      note: { texte: string; position: "au-dessus" | "en-dessous"; surligne: boolean };
+    }
   | { kind: "remove-note"; noteIndex: number };
 
 export type LigneDiff = {
@@ -101,6 +109,110 @@ function pointLabel(p: { etablissement: string; pkAdif: string; pkLfp: string; p
 function pointIdentity(p: { etablissement: string; pkAdif: string; pkLfp: string; pkRac: string; pkRfn: string }): string {
   const name = normName(p.etablissement);
   return name !== "" ? name : PK_FIELDS.map((f) => p[f]).join("|");
+}
+
+// Ancrage d'une note = identité du point ÉTABLI (nommé) le plus proche dans la
+// séquence kilométrique — PAS sa position brute dans le tableau (bug 18/08 : une
+// note insérée n'importe où dans le document décalait l'index de TOUTES les notes
+// suivantes, les faisant comparer à la mauvaise voisine). Deux raffinements
+// nécessaires (1re version encore fragile, cf. bruit inattendu sur le banc de test
+// existant) :
+//   - Respecter le SENS d'ancrage de la note (`position`, cf. parseLigneModele.ts) :
+//     « en-dessous » = collée à la ligne PRÉCÉDENTE → chercher en arrière d'abord ;
+//     « au-dessus » = collée à la ligne SUIVANTE → chercher en avant d'abord.
+//   - PRÉFÉRER un point NOMMÉ (établissement non vide) à un point KM-seul : entre
+//     une note et son établissement réel peuvent s'intercaler plusieurs points sans
+//     nom, dont le PK exact varie facilement d'un import à l'autre (arrondi,
+//     étiquette flottante...) — un ancrage par PK-seul sur CE genre de point est
+//     fragile. On ne retombe sur un point KM-seul que si aucun nom n'existe dans
+//     aucune direction (rare : notes en tout début/fin de ligne).
+// Fonctionne indifféremment sur `LignePoint[]` (socle courant, notes signalées par
+// `type === "note"`) et `ImportedLigneRow[]` (candidat importé, notes signalées par
+// la présence de `type`) : les deux exposent les mêmes champs.
+type RowLike = {
+  type?: string;
+  etablissement?: string;
+  pkAdif?: string;
+  pkLfp?: string;
+  pkRac?: string;
+  pkRfn?: string;
+  position?: string;
+};
+
+function isNoteRow(r: RowLike): boolean {
+  return r.type === "note";
+}
+
+function scanForPoint(rows: readonly RowLike[], start: number, step: 1 | -1): { named: string | null; any: string | null } {
+  let named: string | null = null;
+  let any: string | null = null;
+  for (let j = start; j >= 0 && j < rows.length; j += step) {
+    const r = rows[j];
+    if (isNoteRow(r)) continue;
+    const id = pointIdentity(r as Required<Pick<RowLike, "etablissement" | "pkAdif" | "pkLfp" | "pkRac" | "pkRfn">>);
+    if (any === null) any = id;
+    if ((r.etablissement ?? "") !== "") {
+      named = id;
+      break;
+    }
+  }
+  return { named, any };
+}
+
+function nearestPointIdentity(rows: readonly RowLike[], noteIdx: number): string {
+  const forward = scanForPoint(rows, noteIdx + 1, 1);
+  const backward = scanForPoint(rows, noteIdx - 1, -1);
+  const enDessous = rows[noteIdx]?.position === "en-dessous";
+  const primary = enDessous ? backward : forward;
+  const secondary = enDessous ? forward : backward;
+  return primary.named ?? secondary.named ?? primary.any ?? secondary.any ?? "";
+}
+
+type AnchoredNote<T> = { note: T; anchor: string; flatIndex: number; rowIndex: number };
+
+// `flatIndex` = position parmi les notes seules (ce que `noteIndex` désigne côté
+// application des actions, cf. `applyDiffs.ts::noteAt`) ; `rowIndex` = position dans
+// la séquence complète (points + notes), utile pour situer une insertion.
+function anchorNotes<T extends RowLike>(rows: readonly T[]): AnchoredNote<T>[] {
+  const out: AnchoredNote<T>[] = [];
+  let flatIndex = 0;
+  rows.forEach((r, i) => {
+    if (isNoteRow(r)) {
+      out.push({ note: r, anchor: nearestPointIdentity(rows, i), flatIndex, rowIndex: i });
+      flatIndex++;
+    }
+  });
+  return out;
+}
+
+function groupByAnchor<T>(items: AnchoredNote<T>[]): Map<string, AnchoredNote<T>[]> {
+  const map = new Map<string, AnchoredNote<T>[]>();
+  for (const it of items) {
+    const arr = map.get(it.anchor) ?? [];
+    arr.push(it);
+    map.set(it.anchor, arr);
+  }
+  return map;
+}
+
+// Point d'insertion pour une note candidate sans équivalent courant : clé stable
+// (`identityKey`, la même que `set-point-field`) du point-ancre dans le socle
+// courant, + le côté où l'insérer (avant si « au-dessus » = collée à la ligne
+// suivante, après si « en-dessous »). Remplace un 1er jet qui ne renvoyait qu'un
+// simple COMPTE de notes précédentes (même sémantique que l'ancien `noteIndex`
+// séquentiel) : cassait dès qu'aucune note ne précédait déjà l'ancrage (compte 0
+// = « pas d'ancre » pour `applyDiffs.ts`, donc note ajoutée en FIN de ligne au lieu
+// de son vrai point d'ancrage — révélé par `_test_apply.ts`, la note ajoutée puis
+// re-diffée ne matchait plus rien).
+function insertionAnchor(
+  current: readonly LignePoint[],
+  anchor: string,
+  position: "au-dessus" | "en-dessous" | undefined
+): { key: string; before: boolean } | null {
+  if (anchor === "") return null;
+  const point = current.find((r) => !isNoteRow(r) && pointIdentity(r as ImportedLignePoint) === anchor);
+  if (!point) return null;
+  return { key: identityKey(point as ImportedLignePoint), before: position === "au-dessus" };
 }
 
 // Appariement candidat → point canonique : PK exact (même champ, comparaison
@@ -182,9 +294,7 @@ export function diffLignePoints(
   };
 
   const currentPoints = current.filter((p) => p.type !== "note");
-  const currentNotes = current.filter((p) => p.type === "note");
   const candPoints = candidateRows.filter((r): r is ImportedLignePoint => !("type" in r));
-  const candNotes = candidateRows.filter((r): r is ImportedNote => "type" in r);
 
   const matcher = buildPointMatcher(currentPoints);
   const consumed = new Set<LignePoint>();
@@ -264,50 +374,72 @@ export function diffLignePoints(
     }
   }
 
-  // ---- Notes : appariement séquentiel --------------------------------------------
-  const n = Math.max(currentNotes.length, candNotes.length);
-  for (let i = 0; i < n; i++) {
-    const cur = currentNotes[i];
-    const cand = candNotes[i];
-    if (cur && !cand) {
-      push(`note${i}`, "note", `note « ${(cur.texte ?? "").slice(0, 30)}… »`, cur.texte ?? "", "", {
-        kind: "remove-note",
-        noteIndex: i,
-      });
-      continue;
-    }
-    if (!cur && cand) {
-      push(`note${i}`, "note", `note « ${cand.texte.slice(0, 30)}… »`, "", cand.texte, {
-        kind: "add-note",
-        noteIndex: i,
-        note: { texte: cand.texte, position: cand.position, surligne: cand.surligne },
-      });
-      continue;
-    }
-    if (!cur || !cand) continue;
-    const cible = `note « ${cand.texte.slice(0, 30)}… »`;
-    if ((cur.texte ?? "") !== cand.texte) {
-      push(`note${i}|texte`, "note", cible, cur.texte ?? "", cand.texte, {
-        kind: "set-note-field",
-        noteIndex: i,
-        field: "texte",
-        value: cand.texte,
-      });
-    }
-    if ((cur.position ?? "au-dessus") !== cand.position) {
-      push(`note${i}|position`, "note", cible, cur.position ?? "", cand.position, {
-        kind: "set-note-field",
-        noteIndex: i,
-        field: "position",
-        value: cand.position,
-      });
-    }
-    if ((cur.surligne === true) !== cand.surligne) {
-      push(`note${i}|surligne`, "note", cible, cur.surligne ? "surligné" : "", cand.surligne ? "surligné" : "", {
-        kind: "set-note-surligne",
-        noteIndex: i,
-        value: cand.surligne,
-      });
+  // ---- Notes : appariement par ANCRAGE (point voisin), pas par position brute ---
+  // (cf. `anchorNotes`/`nearestPointIdentity` ci-dessus — remplace l'ancien
+  // appariement séquentiel `currentNotes[i]` vs `candNotes[i]`, cassé dès qu'une
+  // note était ajoutée/déplacée n'importe où dans le document).
+  const currentAnchored = anchorNotes(current);
+  const candAnchored = anchorNotes(candidateRows);
+  const currentByAnchor = groupByAnchor(currentAnchored);
+  const candByAnchor = groupByAnchor(candAnchored);
+  const allAnchors = new Set([...currentByAnchor.keys(), ...candByAnchor.keys()]);
+
+  for (const anchor of allAnchors) {
+    const curList = currentByAnchor.get(anchor) ?? [];
+    const candList = candByAnchor.get(anchor) ?? [];
+    const n = Math.max(curList.length, candList.length);
+    for (let i = 0; i < n; i++) {
+      const curEntry = curList[i];
+      const candEntry = candList[i];
+      const cur = curEntry?.note;
+      // `anchorNotes` ne pousse que des lignes "note" dans les entrées candidates :
+      // le champ n'est pas typé en union côté générique, mais le cast est sûr.
+      const cand = candEntry?.note as ImportedNote | undefined;
+      const noteId = `note@${anchor || "sansAncrage"}#${i}`;
+
+      if (cur && !cand) {
+        push(noteId, "note", `note « ${(cur.texte ?? "").slice(0, 30)}… »`, cur.texte ?? "", "", {
+          kind: "remove-note",
+          noteIndex: curEntry.flatIndex,
+        });
+        continue;
+      }
+      if (!cur && cand) {
+        const anchorInfo = insertionAnchor(current, anchor, cand.position);
+        push(noteId, "note", `note « ${cand.texte.slice(0, 30)}… »`, "", cand.texte, {
+          kind: "add-note",
+          noteIndex: currentAnchored.length,
+          anchorPointKey: anchorInfo?.key ?? null,
+          anchorBefore: anchorInfo?.before ?? false,
+          note: { texte: cand.texte, position: cand.position, surligne: cand.surligne },
+        });
+        continue;
+      }
+      if (!cur || !cand) continue;
+      const cible = `note « ${cand.texte.slice(0, 30)}… »`;
+      if ((cur.texte ?? "") !== cand.texte) {
+        push(`${noteId}|texte`, "note", cible, cur.texte ?? "", cand.texte, {
+          kind: "set-note-field",
+          noteIndex: curEntry.flatIndex,
+          field: "texte",
+          value: cand.texte,
+        });
+      }
+      if ((cur.position ?? "au-dessus") !== cand.position) {
+        push(`${noteId}|position`, "note", cible, cur.position ?? "", cand.position, {
+          kind: "set-note-field",
+          noteIndex: curEntry.flatIndex,
+          field: "position",
+          value: cand.position,
+        });
+      }
+      if ((cur.surligne === true) !== cand.surligne) {
+        push(`${noteId}|surligne`, "note", cible, cur.surligne ? "surligné" : "", cand.surligne ? "surligné" : "", {
+          kind: "set-note-surligne",
+          noteIndex: curEntry.flatIndex,
+          value: cand.surligne,
+        });
+      }
     }
   }
 
