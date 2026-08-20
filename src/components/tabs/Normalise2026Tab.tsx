@@ -395,8 +395,13 @@ function str(v: unknown): string {
 }
 
 // n° français déduit du n° espagnol par parité (trains transfrontaliers) :
-// espagnol pair → +1, impair → −1 (ex. 9705 → 9704).
-function deriveNumeroFrance(numeroEspagne: string): string {
+// espagnol pair → +1, impair → −1 (ex. 9705 → 9704). RÉVERSIBLE (involution) :
+// appliquer deux fois la même règle redonne le nombre de départ (pair→+1 donne
+// un impair, réappliquer -1 sur cet impair redonne le pair initial) — réutilisée
+// telle quelle par `buildCandidateTrains.ts` pour dériver l'espagnol à partir du
+// français quand c'est le français qui est trouvé dans le document (train dont
+// l'origine est en France, cf. mémoire projet 20/08).
+export function deriveNumeroFrance(numeroEspagne: string): string {
   const digits = numeroEspagne.replace(/\D/g, "");
   if (digits === "") return "";
   const n = Number(digits);
@@ -1857,6 +1862,12 @@ export default function Normalise2026Tab() {
       }
       return {
         ...base,
+        // `makeTrain` suppose par défaut que `numero` (= A1, la clé) est le n°
+        // espagnol — faux pour un train dont l'origine est en France (cf.
+        // mémoire projet 20/08) : on écrase avec l'assignation correcte déjà
+        // faite par `buildCandidateTrains.ts` selon le réseau réel d'origine.
+        numeroEspagne: cand.numeroEspagne,
+        numeroFrance: cand.numeroFrance,
         origine: cand.origine,
         destination: cand.destination,
         horaires,

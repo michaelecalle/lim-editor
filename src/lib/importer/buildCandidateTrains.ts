@@ -11,9 +11,12 @@ import {
   type Classeur,
   type ImportedLignePoint,
 } from "./parseLigneModele";
+import { deriveNumeroFrance } from "../../components/tabs/Normalise2026Tab";
 
 export type CandidateTrain = {
-  numero: string;
+  numero: string; // = valeur trouvée en A1, sert d'IDENTIFIANT (clé) uniquement.
+  numeroEspagne: string;
+  numeroFrance: string;
   direction: "sudNord" | "nordSud";
   origine: string;
   destination: string;
@@ -57,9 +60,23 @@ export async function buildCandidateTrains(classeur: Classeur): Promise<Candidat
     const first = points[0];
     const direction: "sudNord" | "nordSud" = first.pkRfn !== "" ? "nordSud" : "sudNord";
 
+    // Réseau du point d'ORIGINE (pas la direction sudNord/nordSud, qui suit une
+    // convention PK-décroissant indépendante du pays réel — cf. cas 38510) :
+    // détermine si le numéro trouvé en A1 est l'espagnol ou le français. Vérifié
+    // sur les vrais PDF 9711/9713/9715 (20/08) : leur page 1 démarre à PERPIGNAN
+    // BV (réseau France) et affiche pourtant le numéro trouvé en A1 (9711/9713/
+    // 9715) — c'est donc le numéro FRANÇAIS pour ces trains-là, pas l'espagnol
+    // comme l'ancien code le supposait systématiquement. Même logique que
+    // `reseauDePoint`/`numeroPourReseau` dans buildFtRows2026.ts (export PDF).
+    const origineEnEspagne = first.pkAdif !== "";
+    const numeroEspagne = origineEnEspagne ? numero : deriveNumeroFrance(numero);
+    const numeroFrance = origineEnEspagne ? deriveNumeroFrance(numero) : numero;
+
     const named = points.filter((p) => p.etablissement.trim() !== "");
     out.push({
       numero,
+      numeroEspagne,
+      numeroFrance,
       direction,
       origine: named[0]?.etablissement ?? "",
       destination: named[named.length - 1]?.etablissement ?? "",
